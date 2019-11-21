@@ -1,0 +1,138 @@
+Opencv博文收藏列表
+opencv识别二维码：https://blog.csdn.net/jia20003/article/details/77348170 
+
+opencv视频：http://www.opencv.org.cn/forum.php?mod=viewthread&tid=259029
+
+基于opencv2实现证件照换背景（从蓝色到红色）：http://blog.csdn.net/jiang111_111shan/article/details/46272429
+
+怎么检测图片中的高光（镜面反射）部分的位置：http://bbs.csdn.net/topics/392183145?page=1
+
+Opencv 去高光或镜面反射（illuminationChange）：http://blog.csdn.net/hello_yxc/article/details/60776315
+
+摄像头测距:http://blog.csdn.net/xylary/article/details/1843809
+
+OpenCV人脸识别LBPH算法源码分析：https://www.cnblogs.com/tianyalu/p/6136970.html?utm_source=itdadao&utm_medium=referral
+
+openCV人脸识别三种算法实现（官网翻译）：http://blog.csdn.net/sunshine_in_moon/article/details/45749945
+
+高斯混合模型的终极理解：http://blog.csdn.net/xmu_jupiter/article/details/50889023
+
+深入浅出了解OCR识别票据原理：http://www.cnblogs.com/qcloud1001/p/8081438.html
+
+**OpenCV之objdetect 模块. 物体检测：级联分类器:http://blog.csdn.net/garfielder007/article/details/51219695
+
+openCV识别定位五个圆的标识物进行定位和位姿确定:https://www.2cto.com/kf/201705/637207.html
+
+**【原】训练自己haar-like特征分类器并识别物体（1）:https://www.cnblogs.com/wengzilin/p/3845271.html
+
+[转]OpenCV的分类器（模式识别）:http://blog.sina.cn/dpool/blog/s/blog_6308b98c0101755o.html?vt=4
+
+1颜色分割 2轮廓检测 3形状识别（多边形拟合）4. surf 或者sift识别
+我一天就能搞完
+
+玩转谷歌物体识别API，用TensorFlow和OpenCV打造实时识别应用 :http://www.sohu.com/a/152691912_473283
+
+使用Python和OpenCV检测图像中的物体并将物体裁剪下来:http://blog.csdn.net/liqiancao/article/details/55670749
+
+RGBD物体识别(4)--使用opencv3读取kinect数据:http://blog.csdn.net/heroacool/article/details/50978605
+
+OpenCV_contri】找出任意物体可能在的位置（Selective search，物体检测）:http://blog.csdn.net/zmdsjtu/article/details/78242521
+
+用gan去马赛克：https://m.yangqiu.cn/redhadoop/3326716.html
+
+摄像头测距:http://blog.csdn.net/xylary/article/details/1843809
+
+openCV人脸识别三种算法实现（官网翻译）：http://blog.csdn.net/sunshine_in_moon/article/details/45749945
+
+OPENCV2 访问图像像素值的三种方法:http://blog.csdn.net/learn_sunzhuli/article/details/47790329
+
+怎样使用OpenCV进行人脸识别:http://www.cnblogs.com/guoming0000/archive/2012/09/27/2706019.html
+
+基于 OpenCV 的人脸识别(强烈推荐) :http://blog.csdn.net/u013346007/article/details/50569626（机器学习算法目录）
+
+opencv 人脸识别 （一）训练样本的处理 :http://blog.csdn.net/abcjennifer/article/details/20396869
+
+OpenCV入门指南 第一篇 安装OpenCV :http://blog.csdn.net/morewindows/article/details/8225783
+
+Win10+VS2015下配置OpenCV3.2教程:http://jingyan.baidu.com/article/4b52d702b3209afc5c774b3c.html
+
+基于OpenCV读取摄像头进行人脸检测和人脸识别:http://blog.csdn.net/chary8088/article/details/24935505（*好文章，实现了人脸比对）
+
+OpenCV&Qt学习之四——OpenCV 实现人脸检测与相关知识整理:http://www.cnblogs.com/emouse/archive/2013/04/23/3037234.html（识别人脸）
+
+如何从0学习opencv,完成类似人脸检测的毕设？:https://www.zhihu.com/question/38536019?sort=created
+
+OpenCV实践之路——人脸检测（C++/Python)：http://blog.csdn.net/xingchenbingbuyu/article/details/51105159
+
+OpenCV图片与视频的人脸检测：http://blog.csdn.net/augusdi/article/details/9012365
+
+OpenCV 3.1.0编译与添加扩展模块：http://blog.csdn.net/jia20003/article/details/54583431
+
+opencv3.0中contrib模块的添加 ：http://blog.csdn.net/streamchuanxi/article/details/51044929（测试可用）
+
+OpenCV 获取摄像头，新建窗口显示摄像头视频：http://blog.csdn.net/augusdi/article/details/8762961
+
+OpenCV实现人脸识别——EigenFace特征脸法：http://blog.csdn.net/loveliuzz/article/details/73481023(*好文章，实现了人脸比对)
+
+【OpenCV入门教程】：http://blog.csdn.net/column/details/opencv-tutorial.html（好用）
+
+图像验证码识别（九）——训练和识别：http://blog.csdn.net/ysc6688/article/details/50772422
+
+【OpenCV结构解说】：http://blog.csdn.net/maweifei/article/details/72457394
+
+车辆识别
+https://github.com/MarvinTeichmann/KittiBox
+
+基于TensorFlow的车牌号识别系统-http://blog.csdn.net/fu_shuwu/article/details/77542167###;
+
+用opencv自带的traincascade车辆检测-http://blog.csdn.net/eagelangel/article/details/51997937###;
+
+【图像处理】Haar Adaboost 检测自定义目标（视频车辆检测算法代码）-http://blog.csdn.net/zhuangxiaobin/article/details/25476833
+
+使用OpenCV检测和追踪车辆-http://blog.csdn.net/xfgryujk/article/details/61421763
+
+Opencv3之动态目标检测：BackgroundSubtractorMOG2参数配置-http://blog.csdn.net/m0_37901643/article/details/72841289
+
+背景提取—修改高斯混合模型BackgroundSubtractorMOG2中的参数及使用-http://blog.csdn.net/xiaohaijiejie/article/details/48374943
+
+【OpenCV3】图像轮廓查找与绘制——cv::findContours()与cv::drawContours()详解:http://blog.csdn.net/guduruyu/article/details/69220296
+
+【原创】C++ 动态数组 vector 详解:http://blog.csdn.net/c20182030/article/details/69667965
+
+OpenCV的Rect矩形类用法:http://blog.csdn.net/kh1445291129/article/details/51149849
+
+【浅墨的游戏编程Blog】毛星云（浅墨）的专栏:http://blog.csdn.net/zhmxy555/article/category/1923021
+
+Retinex图像增强算法(SSR, MSR, MSRCR)详解及其OpenCV源码:http://blog.csdn.net/ajianyingxiaoqinghan/article/details/71435098
+
+opencv车道线检测:http://blog.csdn.net/chongshangyunxiao321/article/details/50999212
+
+opencv学习笔记---如何看懂照片的直方图:http://blog.csdn.net/dancing_night/article/details/51480104
+
+opencv形状识别学习总结：http://blog.csdn.net/bcbobo21cn/article/details/50904209
+
+分水岭算法：http://blog.csdn.net/dcrmg/article/details/52498440
+
+两种图像分割方法比较:http://blog.csdn.net/liyuefeilong/article/details/43895525
+
+图片分割，https://zm8.sm-tc.cn/?src=l4uLj8XQ0IiIiNGckZ2TkJiM0ZyQktCLkI2RnpuQkpqai9CejZyXloma0M3Pzs3Qz8nQz8nQzcrMx8nGytGXi5KT&uid=91e12bcf7b8b965866e6bd2a9bd4bca7&restype=1&from=derive&depth=2&link_type=60&v=1
+
+车牌识别：https://gitee.com/easypr/EasyPR
+
+玩转谷歌物体识别API，用TensorFlow和OpenCV打造实时识别应用:http://www.sohu.com/a/152691912_473283
+
+【原】训练自己haar-like特征分类器并识别物体（1）:https://www.cnblogs.com/wengzilin/p/3845271.html
+
+OpenCV--SVM多分类问题:http://blog.csdn.net/heroacool/article/details/50997024
+
+opencv中的SVM图像分类（二）:http://blog.csdn.net/Always2015/article/details/47107129
+
+SVM模型训练与分类的OpenCV实现 ：http://blog.csdn.net/chaipp0607/article/details/68067098
+
+opencv 机器学习中模型存储问题：http://blog.csdn.net/wmsbeijing/article/details/53118013
+
+车道线检测实验笔记（二）---- 基于Catmull_Rom样条曲线的车道线检测：http://lps-683.iteye.com/blog/2329251
+
+OpenCV特征点检测------Surf（特征点篇） ：http://blog.csdn.net/wangyaninglm/article/details/44805711
+
+【OpenCV】特征检测器 FeatureDetector：http://blog.csdn.net/xiaowei_cqu/article/details/8652096
