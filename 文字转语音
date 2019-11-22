@@ -1,0 +1,123 @@
+前言
+本篇文章主要介绍，如何利用Python来实现将文字转成语音。将文字转成语音主要有两种不同的实现方法：先将文字转成语音，然后再通过读取语音实现发音、直接调用系统内置的语音引擎实现发音，后一种方法的实现主要利用第三方库。
+
+环境
+Python版本：Anaconda 4.4.10
+操作系统：win10
+注意：在使用第三方库的时候，不同的操作系统和Python版本代码可能有所差别。
+
+调用api
+可以调用第三方的语音合成api生成音频文件，然后再播放音频文件即可，这里我使用的是百度语音合成api。
+
+注册账号创建应用
+在使用之前，需要先注册一个百度账号，然后再创建一个语音合成的api，需要拷贝AppID、API Key、Secret Key后面调用接口的时候需要使用。
+
+调用语音合成接口
+python调用百度语音合成api接口详细文档:http://yuyin.baidu.com/docs/tts/196
+安装百度提供的Python库：
+如果已安装pip，执行pip install baidu-aip即可。
+如果已安装setuptools，执行python setup.py install即可。
+from aip import AipSpeech
+
+""" 你的 APPID AK SK """
+APP_ID = '你的 App ID'
+API_KEY = '你的 Api Key'
+SECRET_KEY = '你的 Secret Key'
+client = AipSpeech(APP_ID, API_KEY, SECRET_KEY)
+
+result  = client.synthesis('你好吗？', 'zh', 1, {
+    'vol': 5,
+})
+# 识别正确返回语音二进制 错误则返回dict 参照下面错误码
+if not isinstance(result, dict):
+    with open('auido.mp3', 'wb') as f:
+        f.write(result)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+播放音频文件
+安装playsound：pip install playsound
+
+from playsound import playsound
+
+playsound("auido.mp3")
+1
+2
+3
+利用系统内置语音引擎实现发音
+Pyttsx
+Pyttsx是一个跨平台将文字转成语音的第三方库，它对操作系统内置的语音引擎实现了包装。
+Pyttsx安装
+Python2：pip install pyttsx
+Python3：pip install pyttsx3
+代码
+import pyttsx3
+
+engine = pyttsx3.init()
+engine.say("Good")
+engine.runAndWait()
+1
+2
+3
+4
+5
+pyttsx默认使用的是读取英文引擎，如果需要读取中文时需要修改语言设置，不然可能会报错或者无法发音，首先我们需要参考系统支持的语言类型和参数，通过以下代码可以查看
+
+engine = pyttsx3.init()
+voices = engine.getProperty("voices")
+for item in voices:
+    print(item.id,item.languages)
+1
+2
+3
+4
+
+可以看到ZH-CN的参数，表示的是中文，然后将代码修改成如下即可
+
+engine = pyttsx3.init()
+engine.setProperty("voice","HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Sp
+				eech\Voices\Tokens\TTS_MS_ZH-CN_HUIHUI_11.0")
+engine.say("你好吗？")
+engine.runAndWait()
+1
+2
+3
+4
+5
+gTTS
+gTTS可以将文字转成语音进行保存为MP3格式，然后再读取语音实现发音，它是通过调用Google提供的TTS服务来实现将文字转语音的，因为需要调用Google的服务，所以需要翻墙，因为缺少环境所以下面的代码是没有测试过的。调用下面代码的时候，需要设置在代码中设置代码或者全局代理。
+from gtts import gTTS
+import os
+
+tts = gTTS(text="come on",lang="en")
+tts.save("test.mp3")
+os.system("mpg321 test.mp3")
+1
+2
+3
+4
+5
+6
+如果需要生成wav格式的音频文件，可以利用FFmpeg将MP3的音频文件转成wav格式。
+
+操作系统内置引擎
+利用win32com来调用Windows操作系统内置的语音引擎实现文字的发音
+
+import win32com.client as win
+
+speak = win.Dispatch("SAPI.SpVoice")
+speak.Speak("come on")
+speak.Speak("你好")
+
