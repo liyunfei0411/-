@@ -1,0 +1,4 @@
+1. 转到页面：https://colab.research.google.com/notebooks/welcome.ipynb
+2. 单击菜单栏偏下方的“复制到云端硬盘”
+3. 进入自己的谷歌云端硬盘(drive.google.com)，可以看到出现一个黄色的文件夹，叫做Colab Notebooks，双击打开，里面有文件名为'“欢迎使用Colaboratory”的副本‘
+4. 这时候再单击云端硬盘的“新建”-“更多”，就能看到“Google Colaboratory”项了。
