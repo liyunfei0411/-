@@ -1,0 +1,59 @@
+scrapy-redis去重的修改
+
+梅花九弄丶
+2018.05.30 15:33:37
+字数 181
+阅读 975
+将redis set集合 改为zset 且score为时间戳 key值
+修改scrapy-redis下的去重文件dupefilter.py
+修改文件下的request_seen 方法：
+
+    def request_seen(self, request):
+        """Returns True if request was already seen.
+
+        Parameters
+        ----------
+        request : scrapy.http.Request
+
+        Returns
+        -------
+        bool
+
+        """
+
+        fp = self.request_fingerprint(request)
+        print("---------------------------------------------")
+        print(fp)
+        # This returns the number of values added, zero if already exists.
+        added = self.server.sadd(self.key, fp)
+        return added == 0
+返回0为True，即集合中已经存在，已经爬取过
+返回1代False，即没有这个request
+调度器收到了 enqueue_request() 调用时，会检查这个 url 重复的判断开关，如果要筛选，就要检查这个 request 是否已经存在了；这里的检查 if 如果成立，就直接返回了，只有不成立时，才会有后续的存储操作，也就是入队。
+
+利用redis的score方法算分数，再进行添加
+score= self.server.zscore(key,url)
+
+    def request_seen(self, request):
+        """Returns True if request was already seen.
+
+        Parameters
+        ----------
+        request : scrapy.http.Request
+
+        Returns
+        -------
+        bool
+
+        """
+
+        # fp = self.request_fingerprint(request)
+        # print("---------------------------------------------")
+        # print(fp)
+        # # # This returns the number of values added, zero if already exists.
+        # added = self.server.sadd(self.key, fp)
+        # return added == 0
+   
+        score = self.server.zscore(self.key, request.url)
+        self.server.zadd(self.key, time.time(),url)
+        return score is None
