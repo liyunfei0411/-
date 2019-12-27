@@ -1,0 +1,103 @@
+Scrapyd使用教程
+
+kakaluot
+0.51
+2018.09.20 12:06:34
+字数 812
+阅读 18,032
+先上github地址：Scrapyd
+
+Scrapyd是一个服务，用来运行scrapy爬虫的
+它允许你部署你的scrapy项目以及通过HTTP JSON的方式控制你的爬虫
+官方文档：http://scrapyd.readthedocs.org/
+安装
+pip install scrapyd
+
+安装完成后，在你当前的python环境根目录C:\Program Files\Python35\Scripts下，有一个scrapyd.exe，
+打开命令行，输入scrapyd，如下图：
+image.png
+
+这样scrapyd就运行起来了，访问127.0.0.1:6800即可看到可视化界面。
+注：如果在命令行运行scrapyd报错如下图：
+
+
+image.png
+先pip list 查看你的attrs这个包的版本 然后降到16.3 再试试，如果还不行，请评论区提问。
+
+理解scrapyd
+scrapyd其实就是一个服务器端，真正在部署爬虫的时候，我们需要两个东西：
+
+scrapyd (安装在服务器端)
+scrapy-client (客户端)
+scrapy-client，它允许我们将本地的scrapy项目打包发送到scrapyd 这个服务端
+安装 scrapy-client：pip install scrapy-client
+
+部署scrapy项目
+在scrapy项目目录下，有一个scrapy.cfg的配置文件：
+
+
+image.png
+# Automatically created by: scrapy startproject
+#
+# For more information about the [deploy] section see:
+# https://scrapyd.readthedocs.org/en/latest/deploy.html
+
+[settings]
+default = china.settings
+
+[deploy:demo]
+url = http://localhost:6800/
+project = china
+把原先注释掉的url那一行取消注释，这个就是我们要部署到目标服务器的地址，
+然后，把[deploy]这里改为[deploy:demo]，这里是命名为demo，命名可以任意怎么都可以，只要能标识出来项目就可以。
+下边的project 就是我们的工程名，到此配置文件更改完成。
+
+接着，执行scrapyd-deploy，这个命令在windows下是运行不了的，（在mac和linux下都是可以的）因为在我们安装的根目录C:\Program Files\Python35\Scripts中可以查看这个文件是没有后缀名的：
+image.png
+
+解决方法：在同目录下，新建文件scrapyd-deploy.bat
+@echo off
+
+"C:\Program Files\Python35\python.exe" "C:\Program Files\Python35\Scripts\scrapyd-deploy" %1 %2 %3 %4 %5 %6 %7 %8 %9
+上边代码是调用的我的环境中的python.exe路径，大家可以根据自己环境来改变路径做配置。
+这样就可以执行scrapyd-deploy这个命令了。
+然后，进入到我们爬虫的根目录，运行scrapyd-deploy:
+
+
+image.png
+
+显示这个就证明我们成功执行了scrapyd-deploy，注意：一定要进入爬虫根目录，就是带有scrapy.cfg的那一层及目录。
+接着：
+运行：scrapyd-deploy demo -p china
+因为上边我们已经配置过scrapy.cfg文件了，这里直接使用配置完的参数即可：
+
+
+image.png
+这里显示我们部署成功，可以查看执行启动scrapyd服务端的当先目录下有两个文件夹：
+image.png
+
+到这一步，只是把爬虫项目上传到服务端，并没有启动，
+接下来看看如何启动：
+先运行命令查看服务端状态：curl http://localhost:6800/daemonstatus.json
+image.png
+
+返回的信息告诉我们：都为0
+再执行启动命令：
+curl http://localhost:6800/schedule.json -d project=china -d spider=china
+然后查看网页127.0.0.1:6800
+image.png
+再点jobs，
+
+image.png
+
+这边就是我们爬虫运行的状态以及日志。
+
+后续补充：
+我们在生产环境中，一般scrapyd是部署在服务器，而我们一般会从本地直接发送到服务器端，这时需要调整
+vim /usr/lib/python3/site-packages/scrapyd/default_scrapyd.conf
+scrapyd的默认配置文件：
+默认scrapyd启动bind绑定的ip地址是127.0.0.1端口是：6800，
+将ip地址设置为0.0.0.0
+打开配置文件不需要翻页就能够找到bind_address
+
+还有更多更好用的命令，请查阅官方文档，这里只介绍基本用法。
