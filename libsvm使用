@@ -1,0 +1,170 @@
+1、 Libsvm下载
+
+下载libsvm的最新版本，下载地址为http://www.csie.ntu.edu.tw/~cjlin/libsvm/ 目前最新版本为libsvm-3.22
+将libsvm-3.22.zip解压，我的解压到了F:\libsvm。
+添加环境变量到path：我的电脑->属性->高级->环境变量->系统变量->变量列表里面双击 Path，在变量值最后添加;F:\libsvm\libsvm-3.22\windows 然后点击确定即可。
+解压后可以看到，主要有5个文件夹和一些c++源码文件：
+Java——主要是应用于java平台；
+Python——是用来参数优选的工具，稍后介绍；
+svm-toy——一个可视化的工具，用来展示训练数据和分类界面，里面是源码，其编译后的程序在windows文件夹下；
+tools——主要包含四个python文件，用来数据集抽样(subset)，参数优选（grid），集成测试(easy),数据检查(checkdata)；
+windows——包含libSVM四个exe程序包，我们所用的库就是他们，里面还有个heart_scale，是一个样本文件，可以用记事本打开，用来测试用的。
+其他.h和.cpp文件都是程序的源码，可以编译出相应的.exe文件。其中，最重要的是svm.h和svm.cpp文件，svm-predict.c、svm-scale.c和svm-train.c（还有一个svm-toy.c在svm-toy文件夹中）都是调用的这个文件中的接口函数，编译后就是windows下相应的四个exe程序。另外，里面的 README 跟 FAQ也是很好的文件，对于初学者如果E文过得去，可以看一下。
+
+2、运行python程序的环境配置
+
+由于有可能使用到F:\libsvm\libsvm-3.22\tools下的工具，所以的搭建相应的环境，下载两个软件python和gnuplot，下面说一下两个软件的下载地址和配置：
+a.对于python，下载地址在http://www.python.org上寻找下载，我用的是python2.7的，测试成功。安装在任意目录就行(我放在F:)，将F:\Python27 添加到系统环境变量中。另外将F:\Python27 中的python.exe添加到F:\libsvm\libsvm-3.22\windows下面即可。
+b.对于gnuplot，下载地址在http://www.gnuplot.info/ 。他不用安装，直接将gp530-20180104-win64-mingw http://www.tatsuromatsuoka.com/gnuplot/Eng/winbin/解压放到指定目录即可（我放在F:\libsvm）。然后拷贝其中的gnuplot.exe放到F:\libsvm\libsvm-3.22\windows下面即可。
+
+3、数据格式说明
+
+该软件使用的训练数据和检验数据文件格式如下：
+[label] [index1]:[value1] [index2]:[value2] …
+[label] [index1]:[value1] [index2]:[value2] …
+Label 就是说class（属于哪一类）, 就是你要分类的种类，通常是一些整数。
+index 是有順序的索引，通常是连续的整数。就是指特征编号，必须按照升序排列
+value 就是特征值，用来 train 的数据，通常是一堆实数组成。
+（注：修改训练和测试数据的格式为程序可以识别的格式）
+
+目标值 第一维特征编号：第一维特征值 第二维特征编号：第二维特征值…
+目标值 第一维特征编号：第一维特征值 第二维特征编号：第二维特征值…
+……
+例如： 2.3 1:5.6 2:3.2
+表示训练用的特征有两维，第一维是5.6，第二维是3.2，目标值是2.3
+注意：训练和测试数据的格式必须相同，都如上所示。测试数据中的目标值是为了计算误差用 ）
+
+4、svmscale的用法
+
+svmscale是用来对原始样本进行缩放的，范围可以自己定，一般是[0,1]或[-1,1]。缩放的目的主要是：
+1）防止某个特征过大或过小，从而在训练中起的作用不平衡；
+2）为了计算速度。因为在核计算中，会用到内积运算或exp运算，不平衡的数据可能造成计算困难。
+
+用法：svmscale [-l lower] [-u upper]
+[-y y_lower y_upper]
+[-s save_filename
+[-r restore_filename] filename
+
+其中，[]中都是可选项：
+-l：设定数据下限；lower：设定的数据下限值，缺省为-1
+-u：设定数据上限；upper：设定的数据上限值，缺省为 1
+-y：是否对目标值同时进行缩放；y_lower为下值，y_upper为上限值；
+-s save_filename：表示将缩放的规则保存为文件save_filename；
+-r restore_filename：表示将按照已经存在的规则文件restore_filename进行缩放；
+filename：待缩放的数据文件，文件格式按照libsvm格式。
+
+默认情况下，只需要输入要缩放的文件名就可以了：比如(已经存在的文件为test.txt)
+svmscale test.txt
+这时，test.txt中的数据已经变成[-1,1]之间的数据了。但是，这样原来的数据就被覆盖了，为了让规划好的数据另存为其他的文件，我们用一个dos的重定向符 > 来另存为(假设为out.txt)：
+svmscale test.txt > out.txt
+运行后，我们就可以看到目录下多了一个out.txt文件，那就是规范后的数据。假如，我们想设定数据范围[0,1]，并把规则保存为test.range文件:
+svmscale –l 0 –u 1 –s test.range test.txt > out.txt
+这时，目录下又多了一个test.range文件，可以用记事本打开，下次就可以用-r test.range来载入了。
+
+5、svmtrain的用法
+
+svmtrain我们在前面已经接触过，他主要实现对训练数据集的训练，并可以获得SVM模型。
+用法： svmtrain [options] training_set_file [model_file]
+其中，options为操作参数，可用的选项即表示的涵义如下所示:
+-s设置svm类型：
+0 – C-SVC
+1 – v-SVC
+2 – one-class-SVM
+3 –ε-SVR
+4 – n - SVR
+
+-t设置核函数类型，默认值为2
+0 –线性核：u’*v
+1 –多项式核：(g*u’*v+coef0)degree
+2 – RBF核：exp(-γ*||u-v||2)
+3 – sigmoid核：tanh(γ*u’*v+coef0)
+
+-d degree:设置多项式核中degree的值，默认为3
+-g γ:设置核函数中γ的值，默认为1/k，k为特征（或者说是属性）数；
+-r coef 0:设置核函数中的coef 0，默认值为0；
+-c cost：设置C-SVC、ε-SVR、n - SVR中从惩罚系数C，默认值为1；
+-n v：设置v-SVC、one-class-SVM与n - SVR中参数n，默认值0.5；
+-p ε：设置v-SVR的损失函数中的e，默认值为0.1；
+-m cachesize：设置cache内存大小，以MB为单位，默认值为40；
+-e ε：设置终止准则中的可容忍偏差，默认值为0.001；
+-h shrinking：是否使用启发式，可选值为0或1，默认值为1；
+-b概率估计：是否计算SVC或SVR的概率估计，可选值0或1，默认0；
+-wi weight：对各类样本的惩罚系数C加权，默认值为1；
+-v n：n折交叉验证模式；
+
+model_file：可选项，为要保存的结果文件，称为模型文件，以便在预测时使用。
+默认情况下，只需要给函数提供一个样本文件名就可以了，但为了能保存结果，还是要提供一个结果文件名，比如:test.model,则命令为：
+svmtrain test.txt test.model
+
+6、 svmpredict的用法
+
+svmpredict是根据训练获得的模型，对数据集合进行预测。
+用法：svmpredict [options] test_file model_file output_file
+其中，options为操作参数，可用的选项即表示的涵义如下所示:
+-b probability_estimates——是否需要进行概率估计预测，可选值为0或者1，默认值为0。
+
+model_file ——是由svmtrain产生的模型文件；
+test_file——是要进行预测的数据文件，格式也要符合libsvm格式，即使不知道label的值，也要任意填一个，svmpredict会在output_file中给出正确的label结果，如果知道label的值，就会输出正确率；
+output_file ——是svmpredict的输出文件，表示预测的结果值。
+
+7、使用libsvm
+
+windows 进入 cmd命令窗口
+下载的libsvm包里面已经为我们编译好了（windows）。
+进入libsvm\windows，可以看到这几个exe文件：
+a. svm-predict:
+使用命令格式：svm-predict.exe test_file mode_file output_file
+依照已经train好的model ，输入新的数据，并输出预测新数据的类别。
+b.svm-scale: 有时候特征值的波动范围比较大需要对特征数据进行缩放，可以缩放到0–1之间（自己定义）。
+c.svm-toy:似乎是图形界面，可以自己画点，产生数据等。
+d.svm-train
+使用命令格式：svm-train.exe [option] train_file model_file
+train 会接受特定格式的输入，产生一个model 文件。
+第一步：可以自己生成数据，使用svm-toy：
+双击svm-toy，点击change可以在画布上画点：
+
+
+点击run,其实就是train的过程，划分的区域：
+
+
+点击save可以保存数据（假设保存的数据在D：//libsvm.txt）。
+第二步：使用训练数据libsvm.txt进行建模，使用svm-train：
+使用cmd命令进入到我们解压的libsvm目录中的windows目录，使用svm-train，如下：
+
+其中，
+iter为迭代次数，
+nu 是你选择的核函数类型的参数，
+obj为SVM文件转换为的二次规划求解得到的最小值，
+rho为判决函数的偏置项b，
+nSV 为标准支持向量个数介于[0，c]
+nBSV为边界上的支持向量个数(a[i]=c)，
+Total nSV为支持向量总个数（对于两类来说，因为只有一个分类模型Total nSV = nSV，但是对于多类，这个是各个分类模型的nSV之和
+同时在该目录下会生成一个训练好的model（libsvm.txt.model）可以打开文件查看里面的内容，主要包括一些参数和支持向量等
+第三步：使用建好的model进行预测，使用svm-predict
+
+同时会生成一个输出文件（libsvm.txt.out）,每行代表该行的预测值类别。
+
+8、参数优化
+
+svm的参数优化很重要，libsvm包里面包含了参数的优化函数，主要是暴力求解参数。一般来说我们会使用高斯核函数，包含两个参数（c 和 g）
+使用gird.py文件进行参数优化选择:
+grid.py在libsvm/tools里面，首先需要修改gird.py中的gnuplot文件路径问题，把文件里的路径改成gnuplot 存放的目录：
+
+进入grid.py的相应目录，执行grid.py D://libsvm.txt
+
+前面两个分别是c 跟g的值，这时候我们重新训练模型（加上参数c g）
+
+可以看到，准确率有了显著的提升， 其实这些步骤完全可以使用easy.py进行实现，同理也需要修改eays.py里面的gnuplot文件路径问题，把文件里的路径改成gnuplot 存放的目录
+
+
+步骤总结如下：
+1.转换训练数据为相应的格式。
+2.有时候可能需要使用 svm-scale对数据进行相应的缩放，有利于训练建模。
+
+3.使用grid.py或者easy.py进行参数优化。
+4.使用svm-train建模和svm-predict进行预测。
+
+参考:
+https://www.cnblogs.com/zhazhiqiang/p/3599218.html
+https://jingyan.baidu.com/article/86fae346f8a7113c49121a3f.html
+http://blog.csdn.net/zy_zhengyang/article/details/45009431
