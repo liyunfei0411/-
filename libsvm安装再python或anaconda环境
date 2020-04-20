@@ -1,0 +1,39 @@
+首先我的Ubuntu16.04的python环境是Anaconda3+Python3.6
+-->查看libSVM的主页，地址如下：https://www.csie.ntu.edu.tw/~cjlin/libsvm/
+根据主页的指导，若要使用（The parameter selection tool grid.py）（不知道会不会用到）首先需要安装python和gnuplot，python3已经安装，下面安装gnuplot
+-->首先去gnuplot主页：https://sourceforge.net/projects/gnuplot/files/gnuplot/
+下载最新源码，然后解压，安装
+
+tar xzvf gnuplot-5.2.4.tar.gz 
+#安装 
+cd gnuplot-5.2.4
+./configure 
+make 
+sudo make install
+-->然后回到libSVM的主页下载源码，解压，安装
+
+#首先解压
+tar xzvf libsvm-3.23.tar.gz
+#进入libsvm-3.23（下载的版本）文件夹make 
+cd libsvm-3.23
+make
+#进入python子文件夹，再make
+cd python
+make
+然后，将python子目录下的.py文件拷贝到anaconda的/lib/python3.6目录下
+将libsvm-3.23下的libsvm.so.2库文件拷贝到anaconda的lib目录下
+
+sudo cp *.py ~/anaconda3/lib/python3.6/
+cd ..
+sudo cp libsvm.so.2 ~/anaconda3/lib/
+再进python终端测试一下：
+
+python
+import svm
+import svmutil
+没有报错就成功了！
+接下来就可以继续林轩田-机器学习技法作业1了！
+
+配置过程参考如下博客：
+https://blog.csdn.net/johnnyconstantine/article/details/47008155
+https://blog.csdn.net/qq_33102307/article/details/76569229
