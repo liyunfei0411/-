@@ -1,0 +1,209 @@
+Docker安装 Ubuntu
+Docker 支持以下的 Ubuntu 版本：
+
+Ubuntu Precise 12.04 (LTS)
+Ubuntu Trusty 14.04 (LTS)
+Ubuntu Wily 15.10
+其他更新的版本……
+Docker 要求 Ubuntu 系统的内核版本高于 3.10 ，查看本页面的前提条件来验证你的 Ubuntu 版本是否支持 Docker。
+
+通过 uname -r 命令查看你当前的内核版本
+
+runoob@runoob:~$ uname -r
+1、 使用脚本安装 Docker
+1、获取最新版本的 Docker安装包， 下面命令会获取脚本，并安装docker和依赖包。
+
+qf@ubuntu:~$ wget -qO- https://get.docker.com/ | sh
+image.png
+安装后，有个提示：
+
+If you would like to use Docker as a non-root user, you should now consider
+adding your user to the "docker" group with something like:
+
+  sudo usermod -aG docker qf
+
+Remember that you will have to log out and back in for this to take effect!
+当要以非root用户可以直接运行docker时，需要执行 sudo usermod -aG docker runoob 命令， 然后重新登陆生效
+
+2、启动docker 后台服务
+qf@ubuntu:~$ sudo service docker start
+image.png
+3、 运行Hello-world
+qf@ubuntu:~$ docker run hello-world
+image.png
+4、镜像加速
+几个速度比较快的镜像地址：
+
+Docker 官方中国区
+
+https://registry.docker-cn.com
+网易
+
+http://hub-mirror.c.163.com
+ustc
+
+https://docker.mirrors.ustc.edu.cn
+修改方法：
+直接设置 –registry-mirror 参数，仅对当前的命令有效
+
+docker run hello-world --registry-mirror=https://docker.mirrors.ustc.edu.cn
+或者修改 /etc/default/docker，加入 DOCKER_OPTS=”镜像地址”：
+
+qf@ubuntu:/$ sudo vi /etc/default/docker 
+image.png
+5、Docker卸载
+我自己安装过 docker.io， 和 docker-ce， 卸载时使用下面命令删除即可。
+
+sudo apt-get remove docker.io 
+或者
+
+sudo apt-get remove docker-ce
+Docker镜像使用： Docker容器中运行Ubuntu系统
+当运行容器时，使用的镜像如果在本地中不存在，docker 就会自动从 docker 镜像仓库中下载，默认是从 Docker Hub 公共镜像源下载。
+
+列出镜像列表
+使用docker images 来列出本地主机上的镜像
+
+qf@ubuntu:/$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+hello-world         latest              e38bc07ac18e        7 weeks ago         1.85kB
+ubuntu              15.10               9b9cb95443b5        22 months ago       137MB
+training/webapp     latest              6fae60ef3446        3 years ago         349MB
+各个选项说明:
+
+REPOSITORY：表示镜像的仓库源
+TAG：镜像的标签
+IMAGE ID：镜像ID
+CREATED：镜像创建时间
+SIZE：镜像大小
+同一仓库源可以有多个 TAG，代表这个仓库源的不同个版本，如ubuntu仓库源里，有16.04、 15.10、 14.04等多个不同的版本，我们使用 REPOSITORY:TAG 来定义不同的镜像。
+
+docker ps 列出运行的容器
+qf@ubuntu:/$ docker ps 
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                    NAMES
+abd791681353        ubuntu:15.10        "/bin/bash"         12 minutes ago      Up 12 minutes                                competent_shirley
+be7316800c1a        ubuntu:15.10        "/bin/bash"         24 minutes ago      Up 24 minutes                                eager_noether
+f46856ef54e1        training/webapp     "python app.py"     20 hours ago        Up 20 hours         0.0.0.0:4000->5000/tcp   stoic_jackson
+f44f37f1534f        training/webapp     "python app.py"     20 hours ago        Up 20 hours         0.0.0.0:5000->5000/tcp   wonderful_babbage
+qf@ubuntu:/$ 
+可以使用 docker ps --help查看参数的使用方法
+
+使用15.10的ubuntu系统镜像来运行容器时。
+命令如下（如果本地没有镜像，会自动从 docker 镜像仓库中下载）：
+
+qf@ubuntu:/$ docker run -t -i ubuntu:15.10 /bin/bash
+Unable to find image 'ubuntu:15.10' locally
+15.10: Pulling from library/ubuntu
+7dcf5a444392: Pull complete 
+759aa75f3cee: Pull complete 
+3fa871dc8a2b: Pull complete 
+224c42ae46e7: Pull complete 
+Digest: sha256:02521a2d079595241c6793b2044f02eecf294034f31d6e235ac4b2b54ffc41f3
+Status: Downloaded newer image for ubuntu:15.10
+root@be7316800c1a:/#    
+docker run 参数说明：http://www.runoob.com/docker/docker-run-command.html
+
+进入Ubuntu系统：
+
+qf@ubuntu:/$ docker run -t -i ubuntu:15.10 /bin/bash
+root@abd791681353:/#   //进入到ubuntu:15.10镜像中
+退出系统方式：
+Exit可以直接退出系统，docker ps查看，容器关闭。
+先按CTRL+P 再按CTRL+Q， 退出容器，docker ps查看，容器还存在。
+退出后再进入
+1、首先用docker ps -a 查找到该CONTAINER ID对应编号（比如：0a3309a3b29e）
+2、进入该系统docker attach 0a3309a3b29e （此时没反应，ctrl+c就进入到ubuntu系统中去了）
+
+qf@ubuntu:/$ docker attach abd791681353
+
+root@abd791681353:/# 
+root@abd791681353:/# 
+查看当前Docker运行的容器：
+qf@ubuntu:/$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                    NAMES
+abd791681353        ubuntu:15.10        "/bin/bash"         47 seconds ago      Up 46 seconds                                competent_shirley
+be7316800c1a        ubuntu:15.10        "/bin/bash"         12 minutes ago      Up 12 minutes                                eager_noether
+f46856ef54e1        training/webapp     "python app.py"     19 hours ago        Up 19 hours         0.0.0.0:4000->5000/tcp   stoic_jackson
+f44f37f1534f        training/webapp     "python app.py"     20 hours ago        Up 20 hours         0.0.0.0:5000->5000/tcp   wonderful_babbage
+共享宿主机目录到Ubuntu容器中
+
+qf@ubuntu:~/tmp$ docker run -it -v /home/qf/tmp:/tmp ubuntu:15.10 /bin/bash
+root@b9663506c181:/tmp# ls             //宿主机/home/qf/tmp目录下的内容映射到 docker Ubuntu中的/tmp 目录下
+UnixBench           py  rpm.list      status.sh.gz.bk  test.sh   test6      testeq.sh  teststr.sh
+UnixBench5.1.3.tgz  qf  status.sh.gz  tat              test1.sh  testbc.sh  testif.sh  unixbench.sh
+查看Ubuntu版本：
+root@b9663506c181:/# cat /etc/issue
+Ubuntu 15.10 \n \l
+如何解决docker Ubuntu容器无法联网的问题？
+Ubuntu下，使用docker创建ubuntu容器后，进入容器后，发现纯裸机，没有任何工具，vim、ping、ifconfig工具都没有。 下载安装，apt-get update 连接网络失败。怎么办？
+
+解决方案:
+修改/etc/apt/sources.list文件中的内容为如下内容：
+
+deb http://mirrors.aliyun.com/ubuntu/ trusty main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-backports main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-proposed main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-security main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-updates main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-backports main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-proposed main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-security main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-updates main multiverse restricted universe
+问题来了，怎么修改？ 不能vim， docker外面修改再拷贝进去搞定。
+
+从宿主机复制一份sources.list 文件，并参考上面内容修改。
+cp /etc/apt/sources.list /home/qf/tmp/sources.list
+
+使用共享宿主机的方式启动docker：
+
+docker run -it -v /home/qf/tmp:/tmp ubuntu:15.10 /bin/bash
+docker ubuntu容器内，将 /etc/apt/sources.list 文件备份
+
+cp /etc/apt/sources.list /etc/apt/sources.list.backup
+然后将宿主机共享的文件拷贝过来：
+
+root@2f9c2b4c0bc4:/etc/apt# cp /tmp/sources.list ./
+root@2f9c2b4c0bc4:/etc/apt# cat sources.list
+deb http://mirrors.aliyun.com/ubuntu/ trusty main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-backports main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-proposed main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-security main multiverse restricted universe
+deb http://mirrors.aliyun.com/ubuntu/ trusty-updates main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-backports main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-proposed main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-security main multiverse restricted universe
+deb-src http://mirrors.aliyun.com/ubuntu/ trusty-updates main multiverse restricted universe
+root@2f9c2b4c0bc4:/etc/apt#
+更新系统：
+
+root@2f9c2b4c0bc4:/etc/apt# apt-get update
+终于可以了：
+依次进行下面操作：
+
+root@2f9c2b4c0bc4:/etc/apt# apt-get -f install
+root@2f9c2b4c0bc4:/etc/apt# apt-get -f install vim
+更新镜像
+qf@ubuntu:~$ docker commit -m="has update" -a="qingfang" 2f9c2b4c0bc4 qingfang/ubuntu:v2
+sha256:612f3da43d763251a11b15774fb232279839fb22f78aa0473c8692b95e763485
+各个参数说明：
+
+-m:提交的描述信息
+-a:指定镜像作者
+2f9c2b4c0bc4：容器ID
+qingfang/ubuntu:v2 :指定要创建的目标镜像名
+我们可以使用 docker images 命令来查看我们的新镜像 runoob/ubuntu:v2：
+
+qf@ubuntu:~$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+qingfang/ubuntu     v2                  612f3da43d76        42 seconds ago      224MB
+hello-world         latest              e38bc07ac18e        7 weeks ago         1.85kB
+ubuntu              15.10               9b9cb95443b5        22 months ago       137MB
+training/webapp     latest              6fae60ef3446        3 years ago         349MB
+ubuntu              13.10               7f020f7bf345        3 years ago         185MB
+qf@ubuntu:~$
+以新创建的镜像来启动一个容器：
+
+qf@ubuntu:~$ docker run -t -i qingfang/ubuntu:v2 /bin/bash
+root@11c793b7640d:/#
