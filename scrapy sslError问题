@@ -1,0 +1,11 @@
+原因scrapy爬去https网站时，此网站使用的ssl加密代理是老的尤其是政府网站
+首先卸载cryptography和pyopenssl
+pip uninstall cryptography
+pip uninstall pyopenssl
+然后安装低版本的
+pip install cryptography==1.7.2
+pip install pyopenssl==16.0.0
+在Ubuntu中安装低版本的cryptography可能出现问题
+要降低libssl的版本再安装cryptography
+sudo apt install libssl1.0
+然后安装scrapy，如果还不成功建议安装scrapy1.3.0版本的
