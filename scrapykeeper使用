@@ -1,0 +1,69 @@
+环境准备
+pip install scrapy
+pip install scrapyd
+pip install scrapyd-client
+pip install spiderkeeper
+
+这里作者是在Linux下配置的
+新建一个文件夹，进入到文件夹后，输入scrapyd启动scrapyd服务：
+
+
+image.png
+
+然后再启动spiderkeeper，命令行输入spiderkeeper：
+
+
+image.png
+
+注：这里只介绍最简单的启动方式，带参数的自定义方法可查阅官方文档。
+打开浏览器访问spiderkeeper的地址，我这里是192.168.0.101:5000，然后输入用户名、密码，默认都是admin
+
+
+image.png
+至此，环境准备完毕。
+
+部署爬虫
+我的爬虫程序是在自己的windows电脑上的，打开命令行进入到爬虫根目录：
+执行命令：scrapyd-deploy --build-egg output.egg生成egg文件。（这里如果不懂建议去看：Scrapyd使用教程）
+
+然后在spiderkeeper可视化界面点击creat project:
+image.png
+
+随便输入一个名字：
+image.png
+
+点击创建，跳到这个界面：
+image.png
+注意：此时我们系统中只有一个首次创建的名为china的项目，如果系统中已经有多个项目了，现在又建了一个，这时要先选择项目，再上传对应的egg文件，选择项目点这里：
+image.png
+
+这时可以看到已经切换到china项目:
+
+
+image.png
+
+上传egg文件：
+
+
+image.png
+不要忘记点击提交：
+
+
+image.png
+上传成功：
+
+
+image.png
+此时，部署完成。
+
+运行爬虫
+部署完后，点击 Dashboard 这个按钮，再选择 china 项目，然后点击 RunOnce 按钮创建爬虫：
+image.png
+
+这里参数都默认即可：
+image.png
+
+点击创建爬虫按钮：然后刷新网页，
+image.png
+
+至此，爬虫运行完毕。
