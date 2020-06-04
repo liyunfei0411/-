@@ -6,6 +6,7 @@ pip uninstall pyopenssl
 pip install cryptography==1.7.2
 pip install pyopenssl==16.0.0
 在Ubuntu中安装低版本的cryptography可能出现问题
-要降低libssl的版本再安装cryptography
+先执行：sudo apt-get install build-essential libssl-dev libffi-dev python-dev试试在安装
+如果还不成功要降低libssl的版本再安装cryptography
 sudo apt install libssl1.0
 然后安装scrapy，如果还不成功建议安装scrapy1.3.0版本的
