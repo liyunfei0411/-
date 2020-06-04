@@ -1,4 +1,5 @@
 原因scrapy爬去https网站时，此网站使用的ssl加密代理是老的尤其是政府网站
+用python3.5版本
 首先卸载cryptography和pyopenssl
 pip uninstall cryptography
 pip uninstall pyopenssl
@@ -10,3 +11,5 @@ pip install pyopenssl==16.0.0
 如果还不成功要降低libssl的版本再安装cryptography
 sudo apt install libssl1.0
 然后安装scrapy，如果还不成功建议安装scrapy1.3.0版本的
+如果出现scrapy TypeError: 'float' object is not iterable
+把Twisted库降级到16.6.0即可(使用conda install Twisted==16.6.0安装)。
