@@ -1,0 +1,198 @@
+supervisord进程管理服务
+
+FilesFan
+0.168
+2018.06.05 14:55:04
+字数 1,621
+阅读 1,102
+简介
+官网 http://supervisord.org/
+supervisor是一个允许用户监视和控制在linux操作系统的进程数量的客户端/服务器系统。由python语言编写，用以监控服务器的运行，发现问题能立即自动预警及自动重启等功能。supervisor还要求管理的程序是非daemon程序，supervisord会帮你把它转成daemon程序。
+
+组件
+supervisord
+服务端，他负责在他自己的进程下起一个子进程，相应来自客户端的命令，重启崩溃或异常退出的子进程，输出相关日志，针对于子进程活跃期间的时间进行生成和管理
+配置文件位置： /etc/supervisord.conf 注意配置合理权限
+
+supervisorctl
+命令行客户端，有supervisord提供的一个shell-like接口，通过它，用户可以连接到不同的supervisorctl进程，查看，起停子进程，列出正在运行的子进程。通过TCP进行交互，提供认证，在[supervisorctl]段进行统一的配置
+
+web server
+supervisorctl的web管理界面，通过访问http://localhost:9001/来管理子进程状态，[inet_http_server]这段进行配置
+
+安装
+前提条件是要有python环境，linux一般自带python环境，这里以ubuntu为例。
+1.apt安装
+apt-get install -y supervisor
+2.easy_install安装
+easy_install supervisor
+
+启动
+systemctl start supervisor
+
+配置文件解析
+生成配置文件：
+echo_supervisord_conf > /tmp/supervisord.conf
+一般apt安装后配置文件默认位置是/etc/supervisor/supervisord.conf。其中注释是以分号开头
+[unix_http_server] #这段是通过socket文件启动的web server，这个要有，因为命令行supervisorctl是通过这个实现的。
+file = /tmp/supervisor.sock
+chmod = 0777
+chown= nobody:nogroup
+username = user
+password = 123
+
+[inet_http_server] #通过网络端口启动的web server
+port = 127.0.0.1:9001
+username = user
+password = 123
+
+[supervisord] #这块是服务配置
+logfile = /tmp/supervisord.log 日志文件
+logfile_maxbytes = 50MB 日志文件最大size
+logfile_backups=10 日志轮询下备份数
+loglevel = info 日志级别
+pidfile = /tmp/supervisord.pid pid文件位置
+nodaemon = false 如果是true，supervisor将在前端启动
+minfds = 1024 supervisord启动成功的最小文件描述符数
+minprocs = 200 supervisord启动成功的最小进程描述符数
+umask = 022
+user = chrism 启动用户，这块要注意，这个用户要有相应的目录权限
+identifier = supervisor supervisor进程的 identifier字符串，用户RPC协议接口
+directory = /tmp 当supervisord服务daemonizes时，切换到这个目录，可用这个%(here)s变量来扩展到整个配置文件
+nocleanup = true 禁止supervisord在启动时间清空任何存在的AUTO子日志文件
+childlogdir = /tmp AUTO自日志文件目录
+strip_ansi = false 除去在子日志文件中所有的 ANSI转义序列
+environment = KEY1="value1",KEY2="value2" 一个键/值的列表，一个环境变量吧？
+
+[supervisorctl]
+serverurl = unix:///tmp/supervisor.sock
+username = chris
+password = 123
+prompt = mysupervisor String used as supervisorctl prompt.作为supervisorctl提示字符串。
+
+管理进程配置
+配置文件位置：/etc/supervisor/conf.d/
+一般有如下配置项：
+process_name=%(program_name)s ＃进程名称，默认是程序名称
+command 启动程序命令
+numprocs=1 ＃进程数量
+directory=/tmp ＃路径
+umask=022 ＃掩码
+priority=999 ＃优先级，越大被开起的越早
+autorestart=true ＃自动重启
+startsecs=10 ＃启动等待时间（秒）
+startretries=3 ＃启动重试次数
+stopsignal=TERM ＃关闭信号
+stopwaitsecs=10 ＃关闭前等待时间
+user=chrism ＃监控用户权限
+redirect_stderr=false ＃重定向报错输出
+stdout_logfile=/a/path ＃输入重定向为日志
+stdout_logfile_maxbytes=1MB ＃日志大小
+stdout_logfile_backups=10 ＃日志备份
+stdout_capture_maxbytes=1MB
+stderr_logfile=/a/path
+stderr_logfile_maxbytes=1MB
+stderr_logfile_backups=10
+stderr_capture_maxbytes=1MB
+environment=A=1,B=2 ＃预定义环境变量
+serverurl=AUTO ＃系统URL
+
+示例
+为了更好的展示，我这边写了一个简单的服务。下面的具体的代码：
+
+#!/usr/bin/env python
+import socket
+
+HOST, PORT = '', 8080
+
+listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+listen_socket.bind((HOST, PORT))
+listen_socket.listen(1)
+while True:
+    client_connection, client_address = listen_socket.accept()
+    request = client_connection.recv(1024)
+    http_response = """\
+HTTP/1.1 200 OK
+   Hello World!
+"""
+    client_connection.sendall(http_response)
+    client_connection.close()
+这个脚本是一个简单的web服务器，8080端口，所有访问都会返回 Hello World!
+
+下面我们看下配置文件/etc/supervisor/conf.d/webserver.conf
+
+
+[program:webserver]
+autostart=true
+startretries=3
+command=/opt/webserver.py
+查看状态
+
+root@0c1fc23d1398:~# supervisorctl status
+webserver                        RUNNING   pid 1120, uptime 0:08:07
+supervisorctl命令
+1.交互模式
+直接输入supervisorctl就进入交互模式。
+
+root@0c1fc23d1398:~# supervisorctl 
+webserver                        RUNNING   pid 1120, uptime 0:09:40
+supervisor> 
+2.命令行模式
+如上节所说的supervisorctl status
+
+3.具体命令项
+交互和命令行模式有一样。
+reread 重新加载配置文件
+update 将配置文件里新增的子进程加入进程组，如果设置了autostart=true则会启动新新增的子进程
+status 查看所有进程状态
+status 查看指定进程状态
+start all 启动所有子进程
+start 启动指定子进程
+restart all 重启所有子进程
+restart 重启指定子进程
+stop all 停止所有子进程
+stop 停止指定子进程
+reload 重启supervisord
+add 添加子进程到进程组
+reomve 从进程组移除子进程，需要先stop。注意：移除后，需要使用reread和update才能重新运行该进程
+
+web server界面
+还记得“配置文件解析”一节关于web server段的配置吗？不记得可以回去看一眼。我们稍微展示下web界面。浏览器输入http://<ip>:<port>，会弹出输入用户名和密码的弹窗，输入信息后可以看到界面了。
+
+
+web界面
+从界面中可以看到，服务的状态，进程id和运行的时间。还有一些简单的操作，例如重启，停止，清除日志，监控日志等。
+
+常见的错误
+1.多进程启动
+报错信息如下：Starting supervisor: Error: %(process_num) must be present within process_name when numprocs > 1 in section 'program:nginx' (file: '/etc/supervisor/conf.d/nginx.conf')
+For help, use /usr/bin/supervisord -h
+
+这是配置文件格式不对，下面是格式简介
+当numprocs=1时,process_name=%(program_name)s
+当numprocs>=2时,%(program_name)s_%(process_num)
+
+类似下面的配置
+
+[program:sleeptime]
+autostart=true
+startretries=3
+command=/opt/sleeptime.py
+#主要是下面的2行
+process_name=%(program_name)s%(process_num)s
+numprocs=4
+这个时候查看进程状态，会发现有4个进程出现
+
+root@0c1fc23d1398:/etc/supervisor/conf.d# supervisorctl status
+sleeptime:sleeptime0             RUNNING   pid 1139, uptime 0:00:04
+sleeptime:sleeptime1             RUNNING   pid 1140, uptime 0:00:04
+sleeptime:sleeptime2             RUNNING   pid 1141, uptime 0:00:04
+sleeptime:sleeptime3             RUNNING   pid 1142, uptime 0:00:03
+webserver                        RUNNING   pid 1120, uptime 0:30:00
+2.直接运行 supervisorctl status 报：
+Error: Server requires authentication
+For help, use /usr/local/bin/supervisorctl -h
+因为你设置访问账号密码，所以只能先supervisorctl进去，在status。
+
+主要还是看日志信息，和程序本身的日志。
