@@ -1,0 +1,3 @@
+sudo vim /lib/systemd/system/supervisor.service
+将ExecStart=/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+改成ExecStart=/usr/bin/python2 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
