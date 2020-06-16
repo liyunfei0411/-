@@ -1,0 +1,179 @@
+Python程序鲁棒性增强方法——函数超时处理
+
+Threathunter
+2020.04.18 10:37:13
+字数 471
+阅读 36
+难免犯错，为了增强程序的鲁棒性，多进程中处理函数超时的方法：
+
+1、timeout-decorator
+
+https://pypi.org/project/timeout-decorator/
+
+2、func_timeout(实际测试这种方法最好，可靠性最高)
+
+https://github.com/kata198/func_timeout
+
+3、 eventlet
+
+https://pypi.org/project/eventlet/
+
+以下程序在此环境中测试有效：Python 3.7.4 (default, Aug 13 2019, 20:35:49)
+
+[GCC 7.3.0] :: Anaconda, Inc. on linux
+
+Type "help", "copyright", "credits" or "license" for more information.
+
+测试程序：
+
+import subprocess
+
+import time
+
+import timeout_decorator
+
+import random
+
+from  multiprocessing import JoinableQueue,Process
+
+from pebble import concurrent
+
+from concurrent.futures import TimeoutError
+
+from func_timeout import func_set_timeout, FunctionTimedOut
+
+import eventlet
+
+@concurrent.process(timeout=300)
+
+def mytest2():
+
+    for i in range(1,100):
+
+        time.sleep(1)
+
+        print("{} seconds have passed".format(i))
+
+@timeout_decorator.timeout(300)
+
+def mytest1():
+
+    for i in range(1,100):
+
+        time.sleep(1)
+
+        print("{} seconds have passed".format(i))
+
+def mytest4():
+
+    for i in range(1,3):
+
+        time.sleep(1)
+
+        print("{} seconds have passed".format(i)) 
+
+
+
+@func_set_timeout(10)
+
+def mytest():
+
+    for i in range(1,100):
+
+        time.sleep(1)
+
+        print("{} seconds have passed".format(i))
+
+def producer(q,name,food):
+
+    for i in range(5):
+
+        time.sleep(random.random())
+
+        fd = '%s%s'%(food,i+1)
+
+        q.put(fd)
+
+        print('%s生产了一个%s'%(name,food))
+
+    q.join()
+
+
+
+def consumer(q,name):
+
+    eventlet.monkey_patch()
+
+    while True:
+
+        food = q.get()
+
+        time.sleep(random.random())
+
+        print('%s吃了%s'%(name,food))
+
+        with eventlet.Timeout(6,False):
+
+            mytest4()
+
+            print('xxxx')
+
+        q.task_done()
+
+def consumer1(q,name):
+
+    while True:
+
+        food = q.get()
+
+        time.sleep(random.random())
+
+        print('%s吃了%s'%(name,food))
+
+        try:
+
+            mytest()
+
+        except FunctionTimedOut:
+
+            print ( "doit('arg1', 'arg2') could not complete within 5 seconds and was terminated.\n")
+
+        except Exception as e:
+
+            print('---------------------------------',e) 
+
+        q.task_done()
+
+if __name__ == '__main__':
+
+    jq = JoinableQueue()
+
+    p =Process(target=producer,args=(jq,'喜洋洋','包子'))
+
+    p.start()
+
+    c = Process(target=consumer,args=(jq,'灰太狼'))
+
+    c.daemon = True
+
+    c.start()
+
+    p.join()
+
+参考文献：
+
+https://www.jianshu.com/p/a7fc98c7af4d
+
+https://pypi.org/project/timeout-decorator/
+
+pip install timeout-decorator
+
+Python函数超时，用装饰器解决 func_timeout
+
+https://zhuanlan.zhihu.com/p/39743129
+
+pip install func_timeout
+
+https://blog.csdn.net/dcrmg/article/details/82850457
+
+pip install eventlet
