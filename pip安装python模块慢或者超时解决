@@ -1,0 +1,21 @@
+pip默认的路径是python官网的下载路径,直接下载下载速度会非常慢经常超时导致安装失败。
+
+1. 使用vpn下载
+
+2. 更换pip的下载路径
+
+阿里云 http://mirrors.aliyun.com/pypi/simple/
+
+中国科技大学 https://pypi.mirrors.ustc.edu.cn/simple/
+
+豆瓣 http://pypi.douban.com/simple/
+
+清华大学 https://pypi.tuna.tsinghua.edu.cn/simple/
+
+中国科学技术大学 http://pypi.mirrors.ustc.edu.cn/simple/
+
+ 
+
+用管理员身份执行cmd，然后输入如下命令
+
+pip install tensorflow -i https://pypi.tuna.tsinghua.edu.cn/simple/
