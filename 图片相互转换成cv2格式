@@ -1,0 +1,4 @@
+转换cv2：
+image = cv2.imdecode(np.asarray(bytearray(image),dtype='uint8'), cv2.IMREAD_COLOR)
+转换成二进制图片：
+image_bytes = np.array(cv2.imencode('.jpg', image)[1]).tobytes()image_bytes
