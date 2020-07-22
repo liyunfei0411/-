@@ -1,0 +1,6 @@
+ValueError: Object arrays cannot be loaded when allow_pickle=False
+报错原因
+自Numpy 1.16.3版本发行之后，函数 numpy.load() 和 numpy.lib.format.read_array() 采用allow_pickle关键字，现在默认为False以响应CVE-2019-6446 < nvd.nist.gov/vuln/detail / CVE-2019-6446 >。降级到1.16.2对我有帮助，因为错误发生在一些library内部。
+
+解决方案
+将Numpy版本降级到1.16.2及以下。
