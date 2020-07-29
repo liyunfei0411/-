@@ -1,0 +1,291 @@
+苏格兰高地没有狮子
+There are no lions in the Scottish Highlands.
+
+首页
+ 
+关于
+ 
+标签
+ 
+分类
+ 
+归档
+ 
+搜索
+人工智能换脸工具 DeepFaceLab 2.0 指南 / 教程
+ 发表于 2020-02-27   分类于 创作   阅读: 377   评论: 1
+本文部分机翻自 MrDeepFakes Forums。
+DeepFaceLab 2.0 是一款利用机器学习在视频中换脸的开源工具。其优点是无需配置环境，对 Windows 任何版本 0 依赖，上手简单且功能强大。但是请注意，DFL 2.0 仅能在 Nvidia 显卡上运行。
+
+下载
+DFL 2.0 的 GitHub 页面（包含最新版本以及当前所有更新）：GitHub
+稳定发布版本在这里下载：Google Drive Torrent
+如果你没有 NVIDIA 的 GPU，并且你的 CPU 无法在合理时间内训练，或者你不想使用 DFL 1.0，你可以考虑试用 Google 云计算服务 Google Colab。
+
+DFL 结构说明
+DeepFaceLab 2.0 包含用于提取、训练和合并的.bat 文件，这是创建 deepfake 的三个主要步骤，它们与两个子文件夹一起位于主文件夹中：
+
+_internal （这是 DFLs 工作所需的所有必要文件）
+workspace （这里存放模型、素材视频、Faceset 和最后输出的视频）
+思维导图
+思维导图
+
+
+正式开始
+在开始之前，你需要准备源视频 data_src.mp4 和目标视频 data_dst.mp4，并放置在 workspace 文件夹中。
+部分.bat 文件会提供若干选项，前面的 [] 内为默认值，即不输入任何值直接按回车则使用默认值，后面的 () 内为可供选择的选项，例如
+[png] Output image format ( png/jpg ?:help ) :
+不输入任何值直接按回车会使用默认值 png；你可以输入 png 或者 jpg 再按回车来选择想要的格式；输入 ?（注意是半角问号）再按回车可以获得有关此选项的帮助。
+以下步骤编号对应相应的.bat 文件，请依次运行，但不是所有的步骤都有必要。
+
+清理 workspace
+1) clear workspace.bat
+如果你是第一次运行 DFL，则无需进行这一步，因为 workspace 本来就是空的。如果你此前使用过 DFL，而且想重新开始全新的训练，请运行。
+
+从 data_src.mp4 提取帧
+2) extract images from video data_src.bat
+这一步将会把 data_src.mp4 分解为图片序列并存储在 data_src 文件夹中。运行此.bat 文件会提供如下选项：
+Enter FPS
+默认值 0 为使用 src 视频帧率，即视频每一帧都会被分解为图片并用于训练，但我们并不推荐这样做，因为数据并不是越多越好，相邻的帧区别并不大，对训练的作用非常有限，而且会极大拖慢训练速度。这里建议输入 5-10 之间的数字。
+Output image format
+选择提取的图片格式，JPG 较小而且通常质量足够好，因此推荐使用 JPG。
+
+切割视频（可选）
+3) cut video (drop video on me).bat
+如果你没有视频编辑软件，可以把视频拖到此处以快速切割为想要的长度。
+会出现的选项：
+From time 视频开始时间；
+End time 视频结束时间；
+Audio track 音频，默认保留；
+Bitrate 更改视频比特率，最好保持默认值。
+
+从 data_dst.mp4 提取帧
+3) extract images from video data_dst FULL FPS.bat
+同第 2 步，这一步将会把 data_dst.mp4 一帧帧分解为图片并存储在 data_dst 文件夹中。因为 dst 视频每一帧都需要被换脸，所以这里没有帧数选项。
+
+从 src 数据提取面部
+有两种方法：
+4) data_src extract faces MANUAL.bat （手动提取）
+4) data_src extract faces S3FD.bat （使用 SF3D 算法自动提取，推荐）
+可用选项：
+Which GPU indexes to choose?
+选择用于面部提取的 GPU（或 CPU），尽量使用高性能独立显卡；
+Write debug images to aligned_debug
+选择是否生成 aligned_debug 文件夹，可以选否。
+
+查看 src 数据面部提取结果（可选）
+4.1) data_src view aligned result.bat
+此.bat 会打开一个程序以查看 src 数据面部提取结果，请手动删除其中不是人脸的、方向错误的、过于模糊的、对训练没有帮助的图片。
+
+src 数据排序（可选）
+4.2) data_src sort.bat
+包含各种排序规则以帮助你寻找不需要的面部图片。
+可用的选项：
+
+[0] blur :模糊度
+[1] face yaw direction :面水平方向
+[2] face pitch direction :面俯仰方向
+[3] histogram similarity :直方图相似性
+[4] histogram dissimilarity :直方图差异
+[5] brightness :亮度
+[6] hue :色调
+[7] amount of black pixels :黑色像素数量
+[8] original filename :原始文件名
+[9] one face in image :同一张脸（？）
+[10] absolute pixel difference :绝对像素差
+[11] best faces :最佳面孔
+其它可选项
+4.2) data_src util add landmarks debug images.bat - 在提取面部之后生成 aligned_debug 文件夹（如果你在之前的选项中忘记了）。
+4.2) data_src util faceset enhance.bat - 使用特殊的机器学习算法来提升 / 增强数据集中的面孔外观，如果数据集有点模糊或者你希望通过锐化使其具有更多的细节 / 纹理，则此算法非常有用。
+4.2) data_src util faceset metadata restore.bat - 还原面部集元数据。提取的面部图像含有对齐数据，所以如果直接编辑面部图片并保存的话会丢失这些数据，使用下面的保存元数据和这个还原元数据可以使元数据不被丢失。
+4.2) data_src util faceset metadata save.bat - 保存面部集元数据。
+4.2) data_src util faceset pack.bat - 将 aligned 文件夹中的所有面部图片打包成压缩文件。
+4.2) data_src util faceset unpack.bat - 解压上面打包的压缩文件。
+4.2) data_src util recover original filename.bat - 将面部图像的名称还原为原始顺序 / 文件名（排序后）。
+
+从 dst 数据提取面部
+5) data_dst extract faces MANUAL RE-EXTRACT DELETED ALIGNED_DEBUG.bat
+5) data_dst extract faces MANUAL.bat
+5) data_dst extract faces S3FD + manual fix.bat
+5) data_dst extract faces S3FD.bat
+一般运行第四个即可，工作方式与第四步相同。
+
+查看 dst 数据面部提取结果（可选）
+5.1) data_dst view aligned results.bat
+5.1) data_dst view aligned_debug results.bat
+同 4.1)
+
+dst 数据排序及其它可选项
+5.2) data_dst sort.bat
+5.2) data_dst util faceset pack.bat
+5.2) data_dst util faceset unpack.bat
+5.2) data_dst util recover original filename.bat
+同 4.2)
+
+dst 数据蒙版编辑（可选）
+5.3) data_dst mask editor.bat
+允许您手动编辑提取面部的蒙版（这样您就可以在合并 / 转换后将部分面排除在外 - 如果面上不存在蒙版，则原始面 / 帧的部分将可见）。
+此外，“蒙版编辑器” 还有一个名为 “Default eyebrows expand modifier” 的选项 - 它允许您自动展开眉毛上方的蒙版，而无需手动编辑每个面部的蒙版，但它可能会导致侧面轮廓上的问题，而展开也会覆盖背景（建议仅用于正面角度和中等侧面角度）。
+
+训练模型
+有两种训练模式：
+
+6) train Quick96.bat
+源自 SAE 模型的简单模式，适合显存 2-4G 的低端 GPU。
+仅提供 CPU/GPU 的选项。
+
+6) train SAEHD.bat
+高清自动编码器模式，用于具有至少 6G 显存的高端 GPU。
+拥有大量可定制选项：
+Autobackup every N hour （每 N 小时自动备份一次）
+请至少每 6 小时备份一次。设置为 0（默认值）将禁用自动备份。
+Target iteration （目标迭代）
+在达到一定数量的迭代后，将自动停止训练。设置为 0（默认值）则持续训练直到您手动停止它。一般效果良好的模型至少需要 15 万次迭代。
+Flip faces randomly （随机翻转面）
+如果你的 dst 视频中的人露出了右脸，而你的 src 视频中只有左脸，请开启此功能。但是要记住，没有脸是完全对称的，如果 src 视频中的侧脸上有疤痕等特征，它会被一并镜像到另一边脸。默认值为 n（禁用）。
+Batch_size （批量大小）
+影响每次迭代时相互比较的面数。最低值是 2，VRAM 越高则可以设置越大的数字。作为参考，最高不超过 20。
+Resolution （分辨率）
+在这里设置模型分辨率，此选项在培训期间不能更改。它会影响交换面的分辨率，模型分辨率越高，学习面将越详细，但训练时间也会更久。分辨率可以从 64x64 增加到 256x256，增量为 16。
+Face type （面部类型）
+此选项设置要训练的面区域，有 3 个选项 - 半面、中间半面和全面。
+AE architecture （AE 架构）
+此选项允许您在两种主要学习体系结构（df 和 liae）以及以性能为代价提供更高质量的 HD 版本之间进行选择。如果您有足够多的 src 和 dst 数据能使其面部朝向和表情一一对应，请选择 df 或 dfhd；如果您的数据不足，可以使用 liae 或 liaehd。
+
+接下来的 4 个选项会影响模型的学习能力，修改这些值会对学习性能和质量产生很大的影响，因此建议保留默认值。
+AutoEncoder dimensions （自动编码器尺寸）
+自动编码器尺寸设置，影响模型学习面的整体能力。
+Encoder dimensions （编码器规模）
+编码器规模设置，影响模型学习面的一般结构的能力。
+Decoder dimensions （解码器规模）
+解码器规模设置，影响模型学习精细细节的能力。
+Decoder mask dimensions （解码器蒙版尺寸）
+在启用学习蒙版的情况下进行训练时，蒙版解码器设置会影响学习蒙版的质量。不影响训练质量。
+
+Learn mask （学习蒙版）
+启用将生成 learned mask。如果不启用此功能并在转换器中选择 “learned mask”，则合并期间将默认使用 dst 蒙版。此功能对性能有较大影响但效果通常更好，所以最好在经过一定程度训练后启用并在 5-6 千次迭代后禁用（可在中途多次开关）。默认值为 n（禁用）。
+Place models and optimizer on GPU （在 GPU 上放置模型和优化器）
+启用会增加 GPU 负担并大大提高性能，但会导致 batch size 降低。如果出现 OOM（内存不足）错误，则应禁用此功能。默认值为 y（启用）。
+Use learning rate dropout （使用 dropout 率）
+此功能应仅在训练结束时启用，并且如果启用了 random warp of samples 或者 flip faces randomly 功能则请勿启用此功能。它会让你在更少的迭代次数下得到更多的细节和清晰，但一般情况不会使用此功能。在模型训练完成之前启用可能会导致模型永远无法改进。默认值为 n（禁用）。
+Enable random warp of samples （启用样本随机扭曲）
+用于粗略学习面部特征，但无法学习细节。建议在模型仍在改善的情况下（通过查看减少的损失值和预览窗口）保持启用此功能，在几十万次迭代后你想得到更多的细节时再禁用。默认值为 y（启用）。
+GAN power （GAN 功率）
+额外训练以获得更详细的面孔。仅当模型或多或少完成了训练（在禁用了 random warp of samples 之后）时才应启用此选项。建议从低值开始，然后一直到 max 来测试该特性是否能给出好的结果。如果结果不好，则需要禁用它并启用一段时间的 random warp of samples，以便模型可以恢复。请考虑在启用此功能之前进行备份。默认值为 0.0（禁用）。
+'True face' power （真实面孔权重）
+目的是使最终面部看起来更像 src 面部，与 GAN 一样，只有当 random warp of samples 被禁用，并且模型或多或少经过了充分的训练后，再启用此功能。您同样应该从一个较低的值开始。如果结果不好，则需要禁用它，并启用一段时间的 random warp of samples，以便模型可以恢复。请考虑在启用此功能之前进行备份。默认值为 0.0（禁用）。
+Face style power and Background style power （面部权重与背景权重）
+可以提高合并后的最终结果的质量和外观，但较高的值可能导致学习面看起来更像 dst 数据而不是 src 数据（嘴唇、眼睛、化妆品、肤色等）。建议开始时最多调至 10，并在训练期间将其减少到 1 甚至 0.1。此功能对性能有很大影响，并可能要求您降低 batch size 或禁用 gpu 优化器。请考虑在启用此功能之前进行备份。默认值为 0.0（禁用）。
+Color transfer for src faceset （src 面集肤色转换）
+此功能用于将 src 数据的肤色与 dst 数据匹配，以使最终结果具有与 dst 数据相似的肤色 / 色调，并且在面部移动时不会改变肤色（如果从包含不同光照条件的不同来源获取不同的面部角度，则可能会发生这种情况）。
+Enable gradient clipping （启用渐变剪辑）
+实现此功能是为了防止 DFL 可能发生的所谓模型折叠 / 损坏。它对性能的影响很小，因此如果您真的不想使用它，则必须启用自动备份，因为折叠的模型无法恢复，必须进行清理，并且从头开始训练。默认值是 n（已禁用），但由于性能影响很低，防止模型崩溃可以节省大量时间，因此我建议始终在所有模型上启用它。
+Enable pretraining mode （启用预训练模式）
+启用预训练过程，该过程使用随机人员面部数据集来初步训练模型，在训练到大约 50k-100k 次迭代后，当开始使用您要训练的 src 数据和 dst 数据时，可以恢复该模型，这节省了时间，因为您不必每次都从 0 开始训练。建议使用此功能对模型进行预训练，方法是使用随机人脸制作自己的 src 数据和 dst 数据。可以随时启用，但建议在开始时仅对模型进行一次 pretrain（大约 100-200k 次迭代）。默认值为 n（禁用）。
+
+训练至少 15 万次迭代后可以按回车结束训练。
+
+合并
+6) train Quick96.bat
+6) train SAEHD.bat
+对应训练模式，上一步使用什么模式这一步就用什么模式。
+两者都会出现以下选项：
+Use interactive merger? （使用交互式合并工具？）
+默认值是 y (启用) ，强烈建议使用，因为它具有完整功能，还有一个交互式预览，更改各种选项和启用 / 禁用各种功能的效果将直接反映到屏幕中。
+Choose one of saved models, or enter a name to create a new model. （选择一个保存的模型，或者输入名字创建新模型）
+选择刚刚训练好的模型，一般编号是 0。
+Choose one or several GPU idxs (separated by comma). （你想使用哪个 GPU 或 CPU 进行合并？）
+选择一个或多个 GPU（用半角逗号分隔）。
+
+选择后将弹出一个命令行窗口和一个交互式预览窗口
+
+
+
+命令行窗口显示的是当前帧应用的设置，在交互式预览窗口内按下 Tab 可以切换主界面 / 帮助界面（默认处于帮助界面，请手动切换回主界面）。这些设置没有标准答案，请尝试多种组合并对比效果，直到满意为止。
+
+预览窗口操作：
+按下 </> 来后退 / 前进一个帧；
+按下 Shift+< 返回到第一帧， Shift+> 步进到最后一帧；
+按下 Shift+/ 将当前设置应用到之后所有的帧中（重要，不要傻傻地一帧帧改了）；
+按下 Shift+M 将当前设置应用到之前所有的帧中；
+按下 -/_ 和 =/+ 键以缩放预览窗口；
+按下 Caps Lock 将数值增量从 1 改为 10（举例：开启后，按下 R 将增加 10 个单位的运动模糊）。
+
+主要叠加模式，按数字键切换:
+1 original: 显示原始画面，不换脸；
+2 overlay: 简单的学习面部直接覆盖到帧；
+3 hist-match: 覆盖学习面部并基于 histogram 匹配（按 Z 键切换 2 个模式: normal 和 masked hist match）；
+4 seamless: 使用 opencv poisson 无缝克隆函数将学习的面部融合到原始帧中；
+5 seamless hist match: 结合了 hist-match 和 seamless；
+6 raw-rgb: 覆盖原始的学习面孔，没有任何遮蔽。
+注意: Seamless 模式可能会导致闪烁。
+
+Hist-match 阈值：如果使用了 hist-match 或 seamless hist-match 叠加模式，可以按以下按键控制 histogram 匹配的强度：
+Q 增加值；
+A 减少值。
+
+削弱蒙版：控制蒙版的大小。
+W 缩小蒙版；
+S 放大蒙版。
+
+模糊蒙版：羽化蒙版的边缘，模糊度越高过渡越平滑：
+E 增加模糊度；
+D 减少模糊度。
+
+运动模糊：在运动比较激烈的帧增加这个值，反之减少。
+R 增加运动模糊；
+F 减少动态模糊。
+
+超分辨率：使用算法添加更多牙齿、眼睛等区域的细节。
+T 增强增强效应；
+G 降低增强效应。
+
+模糊 / 锐化：模糊或锐化学习的面部。
+Y 锐化；
+H 模糊；
+N 切换 box/gaussian 模式。
+
+面部比例：新面部的大小比例。
+U 缩小；
+J 放大。
+
+蒙版模式：有 6 种蒙版模式，按 X 切换:
+
+dst: 使用从目标数据提取过程中生成的地标形状派生的蒙版；
+learned Mask: 使用在训练中习得的蒙版，如步骤 6 所述。 如果训练过程中 Learned mask 被禁用，将改用 dst 蒙版；
+fan-prd: 第一种 FANseg 蒙版模式，它可以预测合并过程中蒙版的形状，并可以检测出障碍物（手、眼镜、其他遮住脸部的物体）。
+fan-dst: 第二种 FANseg 蒙版模式，通过考虑蒙版形状的影响，预测蒙版合并过程中的蒙版形状；
+fan-prd+fan-dst: 3rd FANseg 掩蔽方法，结合 fan-prd 和 fan-dst 方法；
+fan-prd+fan-dst+learned: 结合 fan-prd，fan-dst 和 learned mask 的模式。
+最快的蒙版模式是 dst，但它不能排除障碍物；learned mask 在形状方面更好，但也不能排除障碍物；fan-dst 比较慢，但可以排除障碍物，一般来说在大多数情况下足够好；fan-prd 可能有点不可预测，所以不推荐；fan-dst+prd 并没有提升。第六个模式最好，但要求你在训练时打开了 learned mask 开关。
+颜色转换模式：类似于训练过程中的颜色转换，你可以使用这个功能来更好地匹配新面部的肤色，更无缝地和现实的面部交换。 有 8 种不同的模式，按 C 切换:
+RCT
+LCT
+MKL
+MKL-M
+IDT
+IDT-M
+SOT-M
+MIX-M
+建议自行测试来寻找最佳模式。
+图像降级模式：有 3 个设置可以用来影响原始帧的外观 (不影响换脸) :
+Denoise：降噪图像使其稍微模糊（ I 增加效果，K 减少效果）
+Bicubic：使用双三次算法模糊图像（ O 增加效果，L 减少效果）
+Color：减少颜色位深度（ P 增加效果，; 减少效果）
+将所有帧修改到满意的设置之后按下 Shift+> ，然后关闭窗口即可。
+
+左侧为我经过调试得出的最佳设置，仅供参考
+左侧为我经过调试得出的最佳设置，仅供参考
+
+
+将帧转换为视频
+在上一步合并所有面部之后，data_dst 文件夹内会出现新的文件夹 merged，里面是换脸之后所有的帧图像，所以这一步我们需要将帧序列转换为视频文件。
+8) merged to avi.bat
+8) merged to mov lossless.bat
+8) merged to mp4 lossless.bat
+8) merged to mp4.bat
+选择自己想要的视频格式即可，lossless 即无损。
+Bitrate of output file in MB/s （输出文件比特率）
+部分视频网站对稿件有比特率要求，例如 Bilibili 要求比特率不高于 6000kbps 即 6mbps。
+
+然后就完成了！经过这些步骤你会在 workspace 文件夹中得到一个名为 result 的视频文件，请记住遵守法律法规，请勿用于恶意抹黑或捏造！
