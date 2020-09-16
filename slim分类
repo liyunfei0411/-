@@ -1,0 +1,303 @@
+基于TensorFlow-Slim的图像分类模板库
+
+陈阿超
+0.12
+2018.01.14 21:50:40
+字数 3,206
+阅读 5,390
+注：本文是用来练习Markdown的，不过看起来并不是很成功。
+
+TF-slim是一个轻量级的Tensorflow顶层库（tensorflow.ccontrib.slim），可用来定义、训练、评估复杂的网络模型。该目录下包含了几种采用TF-Slim编写的图像分类卷积神经网络（CNN）的训练及评估代码。它允许我们从零开始训练模型或者是从预先训练好的权重文件上进行Finetune操作。此外，它还包含了一些标准图像数据集的下载代码，以及将这些数据集转换成TFRecord格式、读取TFRecord中数据的代码。这使得我们能够很容易地在这些数据集上训练任何模型。它还提供一个jupyter notebook，里面提供了一些例子来指导我们如何使用TF-Slim来进行图像分类操作。如果你需要开发或者修改自己的模型，请参考TF-Slim说明。
+
+联系
+TF-Slim的维护人员：
+
+Nathan Silberman, github: nathansilberman
+Sergio Guadarrama, github: sguada
+目录
+<a href="#Install">安装与设置</a>
+
+<a href="#Data">准备数据</a>
+
+<a href="#Pretrained">使用预训练模型</a>
+
+<a href="#Training">从零开始训练</a>
+
+<a href="#Tuning">Fine tuning</a>
+
+<a href="#Eval">评估结果</a>
+
+<a href="#Export">导出推理图</a>
+
+<a href="#Troubleshooting">问题排除</a>
+
+安装
+<a id='Install'></a>
+
+本节介绍安装步骤以及所需的包。
+
+安装最新版本的TF-Slim
+Tensorflow 1.0之后版本都可以通过tf.contrib.slim来调用TF-Slim。如果要测试你安装的是否能够运行，请输入以下命令：
+
+python -c "import tensorflow.contrib.slim as slim; eval = slim.evaluation.evaluate_once"
+如果安装成功，上述代码应能够正确执行。
+
+安装TF-Slim图像分类模板库
+若要采用TF-Slim来进行图像分类操作，我们还需要安装TF-Slim图像分类模板库。它不是tensorflow代码的一部分，所以我们需要通过如下命令来获取tensorflow/models（包含TF-Slim图像分类模板库代码）。
+
+cd $HOME/workspace
+git clone https://github.com/tensorflow/models/
+下载完成后，我们可以在$HOME/workspace/models/research/slim下找到TF-Slim图像分类模板库的代码。
+
+如果要确认TF-Slim图像分类模板库能否工作，可以键入以下命令进行测试：
+
+cd $HOME/workspace/models/research/slim
+python -c "from nets import cifarnet; mynet = cifarnet.cifarnet"
+准备数据
+<a id='Data'></a>
+
+作为该库的一部分，TF-Slim图像分类模板库的datasets模块中包含了几个用来下载常用的图像数据集（列表如下）、并将图像数据转换成slim可用格式的代码。
+
+数据集	训练集大小	测试集大小	类别数	注释
+Flowers	2500	2500	5	不同尺寸（来源：Flickr）
+Cifar10	60k	10k	10	32×32 彩色
+MNIST	60k	10k	10	28×28 灰度
+ImageNet	1.2M	50k	1000	不同尺寸
+下载数据并转换成TFRecord格式
+对于每一个数据集，我们都需要下载其原始数据并将其转换成Tensorflow默认的TFRecord格式，每个TFRecord文件包含一个TF-Example的协议buffer。下面给出了Flowers数据集的下载与转换过程。
+
+$ DATA_DIR=/tmp/data/flowers
+$ python download_and_convert_data.py \
+    --dataset_name=flowers \
+    --dataset_dir="${DATA_DIR}"
+上述命令执行结束后，可以得到如下的TFRecord文件：
+
+$ ls ${DATA_DIR}
+flowers_train-00000-of-00005.tfrecord
+...
+flowers_train-00004-of-00005.tfrecord
+flowers_validation-00000-of-00005.tfrecord
+...
+flowers_validation-00004-of-00005.tfrecord
+labels.txt
+总共包含5个训练集TFRecord文件，5个验证集TFRecord文件以及$DATA_DIR/labels.txt文件（包含数字lable指向对应的类别名的映射图）。
+
+可以使用类似的方式来生成mnist和cifar10的数据集。但是对于ImageNet，你可能需要参考说明。注意，首先需要在image-net.org上注册一个账号，之后可能需要话费数个小时时间进行下载，并且可能会占用500GB的硬盘空间（我下载的貌似没有这么大）。
+
+创建TF-Slim Dataset Descriptor
+一旦TFRecord文件创建完成，我们就能够很简单地定义一个Slim Dataset，用来存储指向数据文件的指针，以及其他元数据，包括类别label，数据分割train/test，以及如何解析TFExample protos。目前已经完成了Cifar10、ImageNet、Flowers以及MNIST的TF-Slim Dataset Descriptor代码。下面给出了如何使用TF-Slim的DatasetDataProvider函数来实现TF-Slim Dataset Descriptor。
+
+import tensorflow as tf
+from datasets import flowers
+
+slim = tf.contrib.slim
+
+# Selects the 'validation' dataset.
+dataset = flowers.get_split('validation', DATA_DIR)
+
+# Creates a TF-slim DataProvider which reads the dataset in the background
+# during both training and testing
+provider = slim.dataset_data_provider.DatasetDataProvider(dataset)
+[image, label] = provider.get(['image', 'label'])
+自动处理ImageNet数据
+在ImageNet下训练model是一个常见需求。为了方便进行与ImageNet数据相关的训练工作，这里提供了一个自动下载ImageNet数据集并将其转换成默认TFRecord格式的脚本。
+
+TFRecord是一系列分片文件的集合，其每一个分支都能被序列化成为tf.Example proto。每个tf.Example proto包含了ImageNet图片（JPEG格式）以及label、bounding box信息等的元数据。
+
+这里提供的脚本可以下载ImageNet数据并将其转换成默认TFRecord格式。下载和预处理过程可能会耗费数个小时的时间，请耐心等待。
+
+首先，我们需要注册一个ImageNet的账号。访问注册页面，创建一个帐户并请求access key来下载数据。
+
+当拥有USERNAME和PASSWORD之后，我们便可以运行脚本了。请确保硬盘剩余空间大于500GB。这里我们选择DATA_DIR=$HOME/imagenet-data目录来存储数据。
+
+运行下面脚本时，请根据提示输入USERNAME和PASSWORD。每次执行时都需要进行该操作，一旦这两个值输入后，就不在需要再做什么操作了。
+
+# location of where to place the ImageNet data
+DATA_DIR=$HOME/imagenet-data
+
+# build the preprocessing script.
+bazel build slim/download_and_preprocess_imagenet
+
+# run it
+bazel-bin/slim/download_and_preprocess_imagenet "${DATA_DIR}"
+脚本运行结果输出的最后一行是：
+
+2016-02-17 14:30:17.287989: Finished writing all 1281167 images in data set.
+脚本运行结束后，DATA_DIR下将会出现1024个训练集文件和128个验证集文件。这些文件按照train-????-of-1024和validation-?????-of-00128的格式命名。
+
+恭喜！现在我们可以使用ImageNet数据集来进行各种训练、验证的工作了。
+
+预训练模型
+<a id='Pretrained'></a>
+
+若要神经网络较好地工作需要大量的参数，且要对这些参数进行函数逼近。但是，这意味着必须在非常大的数据集上进行训练。因为从头开始的训练模型可能是一个需要数天甚至数周的计算密集型过程，因此这里提供了各种预先训练过的模型，如下所示。这些CNN网络都是在ILSVRC-2012-CLS图像分类数据集（ImageNet）下进行训练的。
+
+在下面的表格中，列出每个CNN模型对应的tensorflow model文件（checkpoint文件链接），以及top1和top5的精度（在ImageNet测试集（test））。注意：VGG和ResNet V1的model是从原始的caffe model（VGG、ResNet V1）转换过来的。而Inception和ResNet V2的model是谷歌自己内部训练出来的。还要注意，这些精度是使用单一图像crop计算得来的。一些学术论文报告中得到的高精度结果是通过多crop和多尺度得来的。
+
+Model	TF-Slim File	Checkpoint	Top-1 Accuracy	Top-5 Accuracy
+Inception V1	Code	inception_v1_2016_08_28.tar.gz	69.8	89.6
+Inception V2	Code	inception_v2_2016_08_28.tar.gz	73.9	91.8
+Inception V3	Code	inception_v3_2016_08_28.tar.gz	78.0	93.9
+Inception V4	Code	inception_v4_2016_09_09.tar.gz	80.2	95.2
+Inception-ResNet-v2	Code	inception_resnet_v2_2016_08_30.tar.gz	80.4	95.3
+ResNet V1 50	Code	resnet_v1_50_2016_08_28.tar.gz	75.2	92.2
+ResNet V1 101	Code	resnet_v1_101_2016_08_28.tar.gz	76.4	92.9
+ResNet V1 152	Code	resnet_v1_152_2016_08_28.tar.gz	76.8	93.2
+ResNet V2 50^	Code	resnet_v2_50_2017_04_14.tar.gz	75.6	92.8
+ResNet V2 101^	Code	resnet_v2_101_2017_04_14.tar.gz	77.0	93.7
+ResNet V2 152^	Code	resnet_v2_152_2017_04_14.tar.gz	77.8	94.1
+ResNet V2 200	Code	TBA	79.9*	95.2*
+VGG 16	Code	vgg_16_2016_08_28.tar.gz	71.5	89.8
+VGG 19	Code	vgg_19_2016_08_28.tar.gz	71.1	89.8
+MobileNet_v1_1.0_224	Code	mobilenet_v1_1.0_224_2017_06_14.tar.gz	70.7	89.5
+MobileNet_v1_0.50_160	Code	mobilenet_v1_0.50_160_2017_06_14.tar.gz	59.9	82.5
+MobileNet_v1_0.25_128	Code	mobilenet_v1_0.25_128_2017_06_14.tar.gz	41.3	66.2
+NASNet-A_Mobile_224#	Code	nasnet-a_mobile_04_10_2017.tar.gz	74.0	91.6
+NASNet-A_Large_331#	Code	nasnet-a_large_04_10_2017.tar.gz	82.7	96.2
+^ResNet V2模型使用的是Inception的预处理方法，输入图像尺寸为299（当使用eval_image_classifier .py时要加上--preprocessing_name Inception --eval_image_size 299）。ResNet V2的精度预测结果是在ImageNet验证集（validation）上得来的。
+
+(#)更多关于NASNet的信息及细节可以参考该说明文档
+
+MobileNet论文中介绍的全部16种模型参见MobileNet Models。
+
+(*): 结果于论文中引用。
+
+下面是一个下载Inception V3 checkpoint的例子：
+
+$ CHECKPOINT_DIR=/tmp/checkpoints
+$ mkdir ${CHECKPOINT_DIR}
+$ wget http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz
+$ tar -xvf inception_v3_2016_08_28.tar.gz
+$ mv inception_v3.ckpt ${CHECKPOINT_DIR}
+$ rm inception_v3_2016_08_28.tar.gz
+从零开始训练模型
+<a id='Training'></a>
+
+我们提供了一个简单的方法来开始从零训练模型。下面的例子将告诉我们如何在ImageNet数据集下训练Inception V3（参数默认）。
+
+DATASET_DIR=/tmp/imagenet
+TRAIN_DIR=/tmp/train_logs
+python train_image_classifier.py \
+    --train_dir=${TRAIN_DIR} \
+    --dataset_name=imagenet \
+    --dataset_split_name=train \
+    --dataset_dir=${DATASET_DIR} \
+    --model_name=inception_v3
+训练过程将会持续数天，训练速度取决于你的电脑硬件。为了方便起见，我们提供了在多个GPU或多个CPU，同步或异步的方式来训练model的方法，具体请参考model_deploy的源码。
+
+Tensorboard
+为了在训练过程中可视化loss值以及其他指标，你可以通过以下命令运行TensorBoard来观察：
+
+tensorboard --logdir=${TRAIN_DIR}
+一旦运行Tensorboard，你就可以通过浏览器访问 http://localhost:6006 来实现可视化功能。
+
+从已知checkpoint处Finetune
+<a id='Tuning'></a>
+
+如果你不想从头开始训练，而是希望有一个预训练好的模型可以进行Finetune操作。至于如何指名从哪个checkpoint进行Finetune，你可以调用--checkpoint_path来指定一个checkpoint的绝对路径。
+
+在对已有model进行Finetune时，要特别注意checkpoint的权重恢复问题，特别是当在一个新的任务中进行Finetune操作时，最终输出的label数目（也就是类别数）可能与原始model不同，那么我们就不能加载最后一层（logits）的权重。为此，我们可以使用--checkpoint_exclude_scopes，这个标识可以用来阻止部分层的权重被加载。当Finetune的新的分类任务与model所代表的原始分类任务的类别数不同时，一般情况下，这两个网络模型最后的层（一般是logits）的维度是不同的。举个例子，如果已有一个在ImageNet下训练好的model，现在我们要在其上Finetune Flowers数据，那么预训练model（ImageNet）的logits输出为[2048×1001]，而新的model（Flowers）的logits输出为[2048×5]，此时，在加载model时就要避免恢复logits层的参数。
+
+请记住，从checkpoint中恢复model中的参数仅对初始化model时有用。一旦模型开始训练了，${TRAIN_DIR}下就会产生新的checkpoint。如果后来停止训练然后再次开始训练，这时候加载的将会是新的checkpoint，而不会在${checkpoint_path}$指示的checkpoint那进行加载了。因此，--checkpoint_path和--checkpoint_exclude_scopes其实仅在训练步数为0（即model初始化）时才起作用。通常，我们Finetune可能只想改变网络中的部分层，其余的并不想改变，那么可以使用--trainable_scopes标识来指定需要训练的层，不想训练的层就会被冻结。
+
+下面给出的例子是在训练好的Inception V3 model基础上Finetune训练Flowers数据的操作，这里Inception V3的model是在1000类的ImageNet数据集下进行训练的，但是Flowers数据则仅有5类。可见Flowers数据集相较ImageNet数据集要小很多，那么我们只需要训练新改变的层就好了。
+
+$ DATASET_DIR=/tmp/flowers
+$ TRAIN_DIR=/tmp/flowers-models/inception_v3
+$ CHECKPOINT_PATH=/tmp/my_checkpoints/inception_v3.ckpt
+$ python train_image_classifier.py \
+    --train_dir=${TRAIN_DIR} \
+    --dataset_dir=${DATASET_DIR} \
+    --dataset_name=flowers \
+    --dataset_split_name=train \
+    --model_name=inception_v3 \
+    --checkpoint_path=${CHECKPOINT_PATH} \
+    --checkpoint_exclude_scopes=InceptionV3/Logits,InceptionV3/AuxLogits \
+    --trainable_scopes=InceptionV3/Logits,InceptionV3/AuxLogits
+模型评估
+<a id='Eval'></a>
+
+评价一个model（不管是预训练好的还是你自己训练的）的具体表现，可以使用eval_image_classifier.py脚本。
+
+下面给出的是下载Inception的预训练模型然后在ImageNet数据集上进行验证的例子：
+
+CHECKPOINT_FILE = ${CHECKPOINT_DIR}/inception_v3.ckpt  # Example
+$ python eval_image_classifier.py \
+    --alsologtostderr \
+    --checkpoint_path=${CHECKPOINT_FILE} \
+    --dataset_dir=${DATASET_DIR} \
+    --dataset_name=imagenet \
+    --dataset_split_name=validation \
+    --model_name=inception_v3
+查询模型评价的示例，了解如何在训练中或训练后进行多checkpoint的验证。
+
+导出推理图
+<a id='Export'></a>
+
+将GraphDef中模型结构保存下来，可参考如下命令：
+
+$ python export_inference_graph.py \
+  --alsologtostderr \
+  --model_name=inception_v3 \
+  --output_file=/tmp/inception_v3_inf_graph.pb
+
+$ python export_inference_graph.py \
+  --alsologtostderr \
+  --model_name=mobilenet_v1 \
+  --image_size=224 \
+  --output_file=/tmp/mobilenet_v1_224.pb
+冻结导出的Graph
+如果你想使用结果model来做一个整合的移动model，你可以运行freeze_graph函数得到一个模型的图结构文件，其中内联了需要的变量。运行方式如下：
+
+bazel build tensorflow/python/tools:freeze_graph
+
+bazel-bin/tensorflow/python/tools/freeze_graph \
+  --input_graph=/tmp/inception_v3_inf_graph.pb \
+  --input_checkpoint=/tmp/checkpoints/inception_v3.ckpt \
+  --input_binary=true --output_graph=/tmp/frozen_inception_v3.pb \
+  --output_node_names=InceptionV3/Predictions/Reshape_1
+其输出的节点（node）名称可能会和之前不同，但是你可以使用summarize_graph工具来检查或测试：
+
+bazel build tensorflow/tools/graph_transforms:summarize_graph
+
+bazel-bin/tensorflow/tools/graph_transforms/summarize_graph \
+  --in_graph=/tmp/inception_v3_inf_graph.pb
+在C++下运行label image
+如果你想在C++下测试结果图（result graph），你可以参考label_image代码：
+
+bazel build tensorflow/examples/label_image:label_image
+
+bazel-bin/tensorflow/examples/label_image/label_image \
+  --image=${HOME}/Pictures/flowers.jpg \
+  --input_layer=input \
+  --output_layer=InceptionV3/Predictions/Reshape_1 \
+  --graph=/tmp/frozen_inception_v3.pb \
+  --labels=/tmp/imagenet_slim_labels.txt \
+  --input_mean=0 \
+  --input_std=255
+问题排除
+<a id='Troubleshooting'></a>
+
+The model runs out of CPU memory.
+运行model超出了CPU内存，详见Model Runs out of CPU memory。
+
+The model runs out of GPU memory.
+运行model超出了GPU内存，详见Adjusting Memory Demands。
+
+The model training results in NaN's.
+模型训练结果为NaN，详见Model Resulting in NaNs.
+
+The ResNet and VGG Models have 1000 classes but the ImageNet dataset has 1001
+关于ResNet和VGG模型为1000类而ImageNet数据集为1001类的问题。ImageNet数据严格来说是1000+1类，其中一类为背景，如果你想训练或者Finetune VGG 或 ResNet的model，你可能会得到以下错误：
+
+InvalidArgumentError: Assign requires shapes of both tensors to match. lhs shape= [1001] rhs shape= [1000]
+这是由于VGG和ResNet V1的最终层的输出为1000导致的。解决该问题的方法是设置--labels_offset=1，这样所得到的结果输出会自动补上1来和ImageNet的label相匹配。
+
+I wish to train a model with a different image size.
+如果你不想按照这些网络模型默认的输入宽高来输入数据，没关系，预处理函数（preprocessing functions）中的height和width两个参数都是可以设置的，你可以通过以下方式来改变默认输入尺寸：
+
+image_preprocessing_fn = preprocessing_factory.get_preprocessing(
+    preprocessing_name,
+    height=MY_NEW_HEIGHT,
+    width=MY_NEW_WIDTH,
+    is_training=True)
