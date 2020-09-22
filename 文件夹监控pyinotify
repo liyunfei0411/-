@@ -1,0 +1,114 @@
+pyinotify介绍
+    pyinotify模块用来监测文件系统的变化，依赖于Linux内核的inotify功能，inotify是一个事件驱动的通知器，其通知接口从内核空间到用户空间通过三个系统调用。pyinotify结合这些系统调用，提供一个顶级的抽象和一个通用的方式来处理这些功能。
+
+    Linux在2.6.13版本以后才提供了inotify。
+
+安装pyinotify
+　　这里使用如下命令安装pyinotify模块
+
+1
+pip3 install pyinotify
+　　安装完毕后，可以直接在命令行中使用
+
+1
+python3 -m pyinotify /tmp
+　　当/tmp目录发生事件时，会输出事件信息
+
+1
+2
+3
+4
+5
+6
+7
+<Event dir=False mask=0x20 maskname=IN_OPEN name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x1 maskname=IN_ACCESS name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x10 maskname=IN_CLOSE_NOWRITE name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x2 maskname=IN_MODIFY name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x20 maskname=IN_OPEN name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x2 maskname=IN_MODIFY name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+<Event dir=False mask=0x8 maskname=IN_CLOSE_WRITE name=daxin.txt path=/tmp pathname=/tmp/daxin.txt wd=1 >
+pyinotify模块API
+　　Notifier是pyinotify模块最重要的类，用来读取通知和处理事件，默认情况下，Notifier处理事件的方式是打印事件。
+
+　　Notifier类在初始化时接受多个参数，但是只有WatchManager对象是必须传递的参数，WatchManager对象保存了需要监视的文件和目录，以及监视文件和目录的哪些事件，Notifier类根据WatchManager对象中的配置来决定如何处理事件。
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+#!/usr/bin/env python3
+ 
+import pyinotify
+ 
+wm = pyinotify.WatchManager()              # 创建WatchManager对象
+wm.add_watch('/tmp',pyinotify.ALL_EVENTS)  # 添加要监控的目录，以及要监控的事件，这里ALL_EVENT表示所有事件
+ 
+notifier = pyinotify.Notifier(wm)          # 交给Notifier进行处理
+notifier.loop()                            # 循环处理事件
+事件标志
+　　pyinotify 仅仅是对 inotify 的Python封装，inotify提供了多种事件，基本上事件名称和含义都是相同的。常用的事件标志有：
+
+事件标志	事件含义
+IN_ACCESS	被监控项目或者被监控目录中的文件被访问，比如一个文件被读取
+IN_MODIFY	被监控项目或者被监控目录中的文件被修改
+IN_ATTRIB	被监控项目或者被监控目录中的文件的元数据被修改
+IN_CLOSE_WRITE	一个打开切等待写入的文件或者目录被关闭
+IN_CLOSE_NOWRITE	一个以只读方式打开的文件或者目录被关闭
+IN_OPEN	文件或者目录被打开
+IN_MOVED_FROM	被监控项目或者目录中的文件被移除监控区域
+IN_MOVED_TO	文件或目录被移入监控区域
+IN_CREATE	在所监控的目录中创建子目录或文件
+IN_DELETE	在所监控的目录中删除目录或文件
+IN_CLOSE*	文件被关闭,等同于IN_CLOSE_WRITE*
+IN_MOVE	文件被移动,等同于IN_CLOSE_NOWRITE
+　　上面列举的是事件的标志位，我们可以用'与'来关联监控多个事件。
+
+1
+multi_event = pyinotify.IN_OPEN | pyinotify.IN_CLOSE_NOWRITE　　
+PS：python3中 IN_CLOSE好像被移除了
+
+事件处理
+　　前面的例子，我们使用的都是默认的事件处理方式：打印在屏幕上，而很多情况下我们需要定制事件的处理方式，来实现特殊的功能。
+
+　　定制事件需要继承ProcessEvent类，针对需要处理的事件编写 process_事件名(self,event) 函数即可
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+import pyinotify
+ 
+multi_event = pyinotify.IN_OPEN | pyinotify.IN_CLOSE_NOWRITE    # 监控多个事件
+wm = pyinotify.WatchManager()                                   # 创建WatchManager对象
+ 
+ 
+class MyEventHandler(pyinotify.ProcessEvent):                   # 定制化事件处理类，注意继承
+    def process_IN_OPEN(self,event):                            # 必须为process_事件名称，event表示事件对象
+        print('OPEN',event.pathname)                            # event.pathname 表示触发事件的文件路径
+    def process_IN_CLOSE_NOWRITE(self,event):
+        print('CLOSE_NOWRITE',event.pathname)
+ 
+handler = MyEventHandler()                                      # 实例化我们定制化后的事件处理类
+notifier = pyinotify.Notifier(wm,handler)                       # 在notifier实例化时传入,notifier会自动执行
+  
+wm.add_watch('/tmp',multi_event)                                # 添加监控的目录，及事件
+notifier.loop()
