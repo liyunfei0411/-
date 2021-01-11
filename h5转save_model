@@ -1,0 +1,3309 @@
+1、生成分类模型
+2、分别用h5和saved model做推理
+2.1 h5模型推理
+2.2 saved_model进行推理
+3、模型转换pb
+3.1 h5转pb
+3.2 saved model转pb
+4、调用pb模型进行推理
+4.1 h5 pb的推理
+4.2 saved pb的推理
+5、h5和saved 尝试互转
+5.1 h5转saved
+5.1.1 h5 转saved后的模型推理
+5.1.2 h5转saved后的模型转pb
+5.1.3 h5转saved模型后转pb推理
+5.2 saved model转h5
+5.2.1 saved转h5后的模型推理
+5.2.2 saved 转h5后的模型转pb
+5.2.3 saved转h5后模型转pb后的推理
+6、互转部分总结
+6.1 精度对比
+6.2 模型大小对比
+总结：
+前期工作（一年前，2019年11月）参见https://blog.csdn.net/u011119817/article/details/103264080，随着框架版本的发展，有些结果不尽相同，因此更新本次博客，建意两者都看看，以便给自己的工作提供指导。
+
+本文更新于2020年11月2日，所用代码全部在tensorflow gpu 2.2版本下进行，对于pb的使用，理论上tensorflow 1.14及以上版本都是可以的。关于本次实验的结论，大家可以直接去看结论部分，总的来说就是h5 和savedmodel两种格式可以互相转换，转换后可以继续进行转pb,所有可以互转的工作全部可以做。
+
+另外，本博客的结论是基于一个很简单的模型来做的，所以对于更加复杂的模型，更少见的算子等情况，还要自己动手做实验，毕竟模型转换是一种实验性工作。
+
+1、生成分类模型
+import tensorflow as tf
+print(tf.__version__)
+1
+2
+2.2.0
+1
+#use tf2.x to train a model,this code can be run both by tf1.14 and tf2.x
+
+# This file contains functions for training a TensorFlow model
+import tensorflow as tf
+import numpy as np
+import os
+print("tensorflow version",tf.__version__)
+def process_dataset():
+    # Import the data
+    (x_train, y_train),(x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    x_train, x_test = x_train / 255.0, x_test / 255.0
+
+    # Reshape the data
+    NUM_TRAIN = 60000
+    NUM_TEST = 10000
+    x_train = np.reshape(x_train, (NUM_TRAIN, 28, 28, 1))
+    x_test = np.reshape(x_test, (NUM_TEST, 28, 28, 1))
+    return x_train, y_train, x_test, y_test
+
+def create_model():
+    model = tf.keras.models.Sequential()
+    model.add(tf.keras.layers.InputLayer(input_shape=[28,28, 1]))
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dense(512, activation=tf.nn.relu))
+    model.add(tf.keras.layers.Dense(10, activation=tf.nn.softmax))
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+
+def main():
+    x_train, y_train, x_test, y_test = process_dataset()
+    model = create_model()
+    model.summary()
+    # Train the model on the data
+    model.fit(x_train, y_train, epochs = 5, verbose = 1)
+    # Evaluate the model on test data
+    model.evaluate(x_test, y_test)
+    model.save("models/lenet5.h5",save_format='h5')
+    model.save("models/lenet5",save_format='tf')
+    # save(model, filename="models/lenet5.pb")
+
+# if __name__ == '__main__':
+#     main()
+if not os.path.exists('models'):
+    os.mkdir('models')
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+tensorflow version 2.2.0
+Model: "sequential"
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #   
+=================================================================
+flatten (Flatten)            (None, 784)               0         
+_________________________________________________________________
+dense (Dense)                (None, 512)               401920    
+_________________________________________________________________
+dense_1 (Dense)              (None, 10)                5130      
+=================================================================
+Total params: 407,050
+Trainable params: 407,050
+Non-trainable params: 0
+_________________________________________________________________
+Epoch 1/5
+1875/1875 [==============================] - 3s 1ms/step - loss: 0.2001 - accuracy: 0.9414
+Epoch 2/5
+1875/1875 [==============================] - 3s 1ms/step - loss: 0.0796 - accuracy: 0.9760
+Epoch 3/5
+1875/1875 [==============================] - 3s 1ms/step - loss: 0.0525 - accuracy: 0.9833
+Epoch 4/5
+1875/1875 [==============================] - 3s 1ms/step - loss: 0.0357 - accuracy: 0.9886
+Epoch 5/5
+1875/1875 [==============================] - 3s 1ms/step - loss: 0.0283 - accuracy: 0.9905
+313/313 [==============================] - 0s 1ms/step - loss: 0.0695 - accuracy: 0.9793
+WARNING:tensorflow:From /home/tl/miniconda3/envs/tf2gpu/lib/python3.7/site-packages/tensorflow/python/ops/resource_variable_ops.py:1817: calling BaseResourceVariable.__init__ (from tensorflow.python.ops.resource_variable_ops) with constraint is deprecated and will be removed in a future version.
+Instructions for updating:
+If using Keras pass *_constraint arguments to layers.
+INFO:tensorflow:Assets written to: models/lenet5/assets
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+2、分别用h5和saved model做推理
+从测试集中随意选一张图片，保存成png格式，用来以下的测试
+
+2.1 h5模型推理
+#生成保存结果的路径
+if not os.path.exists('out_results'):
+    os.mkdir('out_results')
+1
+2
+3
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+    
+def h5_infer(model_path=None,img=None):
+    model = tf.keras.models.load_model(model_path)
+    result= model.predict(img)
+    return result
+
+def main():
+    model_path = "models/lenet5.h5"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= np.array(img).reshape(1,28,28,1)/255.0
+    result = h5_infer(model_path,img)
+    print("result.shape",result.shape)
+    print(result)
+    np.save('out_results/h5_result.npy',result)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+result.shape (1, 10)
+[[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+在这里插入图片描述
+
+2.2 saved_model进行推理
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+    
+def savedmodel_infer(model_path=None,img=None):
+    model = tf.keras.models.load_model(model_path)
+    result= model.predict(img)
+    return result
+
+def main():
+    model_path = "models/lenet5"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= np.array(img).reshape(1,28,28,1)/255.0
+    result = savedmodel_infer(model_path,img)
+    print("result.shape",result.shape)
+    print(result)
+    np.save('out_results/savedmodel_result.npy',result)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+result.shape (1, 10)
+[[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+在这里插入图片描述
+
+还有另一种推理方式
+
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+from tensorflow.python.saved_model import tag_constants
+
+def savedmodel_infer(model_path=None,img=None):
+    saved_model_loaded = tf.saved_model.load(model_path, tags=[tag_constants.SERVING])
+    model = saved_model_loaded.signatures['serving_default']
+    result= model(img)
+    return result
+
+def main():
+    model_path = "models/lenet5"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= tf.constant(np.array(img).astype(np.float32).reshape(1,28,28,1)/255.0)
+    result = savedmodel_infer(model_path,img)
+    print(result) #获取的结果是个字典
+    for k,v in result.items(): #key 是layername 
+        value=v.numpy()
+    print('k=%s with value:'% k,value)
+    np.save('out_results/savedmodelanother_result.npy',value)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+{'dense_1': <tf.Tensor: shape=(1, 10), dtype=float32, numpy=
+array([[2.6573987e-14, 1.6878349e-10, 1.6627098e-07, 1.4200980e-04,
+        1.8240679e-23, 9.9985778e-01, 4.3281314e-16, 4.1571907e-12,
+        2.4773154e-12, 3.5959408e-10]], dtype=float32)>}
+k=dense_1 with value: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+在这里插入图片描述
+
+3、模型转换pb
+有两个思路，分别是h5转pb、saved model转pb
+
+3.1 h5转pb
+# use tf2.x(tf1.14 also ok) to convert the model hdf5 trained by tf2.x to pb
+import tensorflow as tf
+
+def freeze_session(model_path=None,clear_devices=True):
+    tf.compat.v1.reset_default_graph()
+    session=tf.compat.v1.keras.backend.get_session()
+    graph = session.graph
+    with graph.as_default():
+        model = tf.keras.models.load_model(model_path)
+        output_names = [out.op.name for out in model.outputs]
+        print("output_names",output_names)
+        input_names =[innode.op.name for innode in model.inputs]
+        print("input_names",input_names)
+        input_graph_def = graph.as_graph_def()
+        for node in input_graph_def.node:
+            print('node:', node.name)
+        print("len node1",len(input_graph_def.node))
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph =  tf.compat.v1.graph_util.convert_variables_to_constants(session, input_graph_def,
+                                                      output_names)
+        
+        outgraph = tf.compat.v1.graph_util.remove_training_nodes(frozen_graph)#去掉与推理无关的内容
+        print("##################################################################")
+        for node in outgraph.node:
+            print('node:', node.name)
+        print("length of  node",len(outgraph.node))
+        tf.io.write_graph(frozen_graph, "./models", "lenet5_h5.pb", as_text=False)
+        return outgraph
+
+def main():  
+
+    freeze_session("models/lenet5.h5",True)
+
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+output_names ['dense_1/Softmax']
+input_names ['flatten_input']
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel/Initializer/random_uniform/shape
+node: dense/kernel/Initializer/random_uniform/min
+node: dense/kernel/Initializer/random_uniform/max
+node: dense/kernel/Initializer/random_uniform/RandomUniform
+node: dense/kernel/Initializer/random_uniform/sub
+node: dense/kernel/Initializer/random_uniform/mul
+node: dense/kernel/Initializer/random_uniform
+node: dense/kernel
+node: dense/kernel/IsInitialized/VarIsInitializedOp
+node: dense/kernel/Assign
+node: dense/kernel/Read/ReadVariableOp
+node: dense/bias/Initializer/zeros
+node: dense/bias
+node: dense/bias/IsInitialized/VarIsInitializedOp
+node: dense/bias/Assign
+node: dense/bias/Read/ReadVariableOp
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel/Initializer/random_uniform/shape
+node: dense_1/kernel/Initializer/random_uniform/min
+node: dense_1/kernel/Initializer/random_uniform/max
+node: dense_1/kernel/Initializer/random_uniform/RandomUniform
+node: dense_1/kernel/Initializer/random_uniform/sub
+node: dense_1/kernel/Initializer/random_uniform/mul
+node: dense_1/kernel/Initializer/random_uniform
+node: dense_1/kernel
+node: dense_1/kernel/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/Assign
+node: dense_1/kernel/Read/ReadVariableOp
+node: dense_1/bias/Initializer/zeros
+node: dense_1/bias
+node: dense_1/bias/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/Assign
+node: dense_1/bias/Read/ReadVariableOp
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+node: Placeholder
+node: AssignVariableOp
+node: ReadVariableOp
+node: Placeholder_1
+node: AssignVariableOp_1
+node: ReadVariableOp_1
+node: Placeholder_2
+node: AssignVariableOp_2
+node: ReadVariableOp_2
+node: Placeholder_3
+node: AssignVariableOp_3
+node: ReadVariableOp_3
+node: VarIsInitializedOp
+node: VarIsInitializedOp_1
+node: VarIsInitializedOp_2
+node: VarIsInitializedOp_3
+node: init
+node: dense_1_target
+node: total/Initializer/zeros
+node: total
+node: total/IsInitialized/VarIsInitializedOp
+node: total/Assign
+node: total/Read/ReadVariableOp
+node: count/Initializer/zeros
+node: count
+node: count/IsInitialized/VarIsInitializedOp
+node: count/Assign
+node: count/Read/ReadVariableOp
+node: metrics/accuracy/Squeeze
+node: metrics/accuracy/ArgMax/dimension
+node: metrics/accuracy/ArgMax
+node: metrics/accuracy/Cast
+node: metrics/accuracy/Equal
+node: metrics/accuracy/Cast_1
+node: metrics/accuracy/Const
+node: metrics/accuracy/Sum
+node: metrics/accuracy/AssignAddVariableOp
+node: metrics/accuracy/ReadVariableOp
+node: metrics/accuracy/Size
+node: metrics/accuracy/Cast_2
+node: metrics/accuracy/AssignAddVariableOp_1
+node: metrics/accuracy/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan/ReadVariableOp
+node: metrics/accuracy/div_no_nan/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan
+node: metrics/accuracy/Identity
+node: loss/dense_1_loss/Cast
+node: loss/dense_1_loss/Shape
+node: loss/dense_1_loss/Reshape/shape
+node: loss/dense_1_loss/Reshape
+node: loss/dense_1_loss/strided_slice/stack
+node: loss/dense_1_loss/strided_slice/stack_1
+node: loss/dense_1_loss/strided_slice/stack_2
+node: loss/dense_1_loss/strided_slice
+node: loss/dense_1_loss/Reshape_1/shape/0
+node: loss/dense_1_loss/Reshape_1/shape
+node: loss/dense_1_loss/Reshape_1
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/Shape
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/SparseSoftmaxCrossEntropyWithLogits
+node: loss/dense_1_loss/weighted_loss/Cast/x
+node: loss/dense_1_loss/weighted_loss/Mul
+node: loss/dense_1_loss/Const
+node: loss/dense_1_loss/Sum
+node: loss/dense_1_loss/num_elements
+node: loss/dense_1_loss/num_elements/Cast
+node: loss/dense_1_loss/Const_1
+node: loss/dense_1_loss/Sum_1
+node: loss/dense_1_loss/value
+node: loss/mul/x
+node: loss/mul
+node: iter/Initializer/zeros
+node: iter
+node: iter/IsInitialized/VarIsInitializedOp
+node: iter/Assign
+node: iter/Read/ReadVariableOp
+node: beta_1/Initializer/initial_value
+node: beta_1
+node: beta_1/IsInitialized/VarIsInitializedOp
+node: beta_1/Assign
+node: beta_1/Read/ReadVariableOp
+node: beta_2/Initializer/initial_value
+node: beta_2
+node: beta_2/IsInitialized/VarIsInitializedOp
+node: beta_2/Assign
+node: beta_2/Read/ReadVariableOp
+node: decay/Initializer/initial_value
+node: decay
+node: decay/IsInitialized/VarIsInitializedOp
+node: decay/Assign
+node: decay/Read/ReadVariableOp
+node: learning_rate/Initializer/initial_value
+node: learning_rate
+node: learning_rate/IsInitialized/VarIsInitializedOp
+node: learning_rate/Assign
+node: learning_rate/Read/ReadVariableOp
+node: dense/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense/kernel/m/Initializer/zeros/Const
+node: dense/kernel/m/Initializer/zeros
+node: dense/kernel/m
+node: dense/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense/kernel/m/Assign
+node: dense/kernel/m/Read/ReadVariableOp
+node: dense/bias/m/Initializer/zeros
+node: dense/bias/m
+node: dense/bias/m/IsInitialized/VarIsInitializedOp
+node: dense/bias/m/Assign
+node: dense/bias/m/Read/ReadVariableOp
+node: dense_1/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense_1/kernel/m/Initializer/zeros/Const
+node: dense_1/kernel/m/Initializer/zeros
+node: dense_1/kernel/m
+node: dense_1/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/m/Assign
+node: dense_1/kernel/m/Read/ReadVariableOp
+node: dense_1/bias/m/Initializer/zeros
+node: dense_1/bias/m
+node: dense_1/bias/m/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/m/Assign
+node: dense_1/bias/m/Read/ReadVariableOp
+node: dense/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense/kernel/v/Initializer/zeros/Const
+node: dense/kernel/v/Initializer/zeros
+node: dense/kernel/v
+node: dense/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense/kernel/v/Assign
+node: dense/kernel/v/Read/ReadVariableOp
+node: dense/bias/v/Initializer/zeros
+node: dense/bias/v
+node: dense/bias/v/IsInitialized/VarIsInitializedOp
+node: dense/bias/v/Assign
+node: dense/bias/v/Read/ReadVariableOp
+node: dense_1/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense_1/kernel/v/Initializer/zeros/Const
+node: dense_1/kernel/v/Initializer/zeros
+node: dense_1/kernel/v
+node: dense_1/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/v/Assign
+node: dense_1/kernel/v/Read/ReadVariableOp
+node: dense_1/bias/v/Initializer/zeros
+node: dense_1/bias/v
+node: dense_1/bias/v/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/v/Assign
+node: dense_1/bias/v/Read/ReadVariableOp
+node: VarIsInitializedOp_4
+node: VarIsInitializedOp_5
+node: VarIsInitializedOp_6
+node: VarIsInitializedOp_7
+node: VarIsInitializedOp_8
+node: VarIsInitializedOp_9
+node: VarIsInitializedOp_10
+node: VarIsInitializedOp_11
+node: VarIsInitializedOp_12
+node: VarIsInitializedOp_13
+node: VarIsInitializedOp_14
+node: VarIsInitializedOp_15
+node: VarIsInitializedOp_16
+node: VarIsInitializedOp_17
+node: VarIsInitializedOp_18
+node: init_1
+node: Placeholder_4
+node: AssignVariableOp_4
+node: ReadVariableOp_4
+node: Placeholder_5
+node: AssignVariableOp_5
+node: ReadVariableOp_5
+node: Placeholder_6
+node: AssignVariableOp_6
+node: ReadVariableOp_6
+node: Placeholder_7
+node: AssignVariableOp_7
+node: ReadVariableOp_7
+node: Placeholder_8
+node: AssignVariableOp_8
+node: ReadVariableOp_8
+node: Placeholder_9
+node: AssignVariableOp_9
+node: ReadVariableOp_9
+node: Placeholder_10
+node: AssignVariableOp_10
+node: ReadVariableOp_10
+node: Placeholder_11
+node: AssignVariableOp_11
+node: ReadVariableOp_11
+node: Placeholder_12
+node: AssignVariableOp_12
+node: ReadVariableOp_12
+len node1 231
+INFO:tensorflow:Froze 4 variables.
+INFO:tensorflow:Converted 4 variables to const ops.
+##################################################################
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel
+node: dense/bias
+node: dense/MatMul
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel
+node: dense_1/bias
+node: dense_1/MatMul
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+length of  node 13
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+3.2 saved model转pb
+import tensorflow as tf
+
+def freeze_session(model_path=None,clear_devices=True):
+    tf.compat.v1.reset_default_graph()
+    session=tf.compat.v1.keras.backend.get_session()
+    graph = session.graph
+    with graph.as_default():
+        model = tf.keras.models.load_model(model_path)
+        output_names = [out.op.name for out in model.outputs]
+        print("output_names",output_names)
+        input_names =[innode.op.name for innode in model.inputs]
+        print("input_names",input_names)        
+        input_graph_def = graph.as_graph_def()
+        for node in input_graph_def.node:
+            print('node:', node.name)
+        print("len node1",len(input_graph_def.node))
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph =  tf.compat.v1.graph_util.convert_variables_to_constants(session, input_graph_def,
+                                                      output_names)
+        
+        outgraph = tf.compat.v1.graph_util.remove_training_nodes(frozen_graph)#去掉与推理无关的内容
+        print("##################################################################")
+        for node in outgraph.node:
+            print('node:', node.name)
+        print("length of  node",len(outgraph.node))
+        tf.io.write_graph(frozen_graph, "./models", "lenet5_savedmodel.pb", as_text=False)
+
+def main():  
+
+    freeze_session("models/lenet5",True)
+    
+
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+output_names ['dense_1/Softmax']
+input_names ['input_1']
+node: kernel/Initializer/random_uniform/shape
+node: kernel/Initializer/random_uniform/min
+node: kernel/Initializer/random_uniform/max
+node: kernel/Initializer/random_uniform/RandomUniform
+node: kernel/Initializer/random_uniform/sub
+node: kernel/Initializer/random_uniform/mul
+node: kernel/Initializer/random_uniform
+node: kernel
+node: kernel/IsInitialized/VarIsInitializedOp
+node: kernel/Assign
+node: kernel/Read/ReadVariableOp
+node: bias/Initializer/zeros
+node: bias
+node: bias/IsInitialized/VarIsInitializedOp
+node: bias/Assign
+node: bias/Read/ReadVariableOp
+node: kernel_1/Initializer/random_uniform/shape
+node: kernel_1/Initializer/random_uniform/min
+node: kernel_1/Initializer/random_uniform/max
+node: kernel_1/Initializer/random_uniform/RandomUniform
+node: kernel_1/Initializer/random_uniform/sub
+node: kernel_1/Initializer/random_uniform/mul
+node: kernel_1/Initializer/random_uniform
+node: kernel_1
+node: kernel_1/IsInitialized/VarIsInitializedOp
+node: kernel_1/Assign
+node: kernel_1/Read/ReadVariableOp
+node: bias_1/Initializer/zeros
+node: bias_1
+node: bias_1/IsInitialized/VarIsInitializedOp
+node: bias_1/Assign
+node: bias_1/Read/ReadVariableOp
+node: total/Initializer/zeros
+node: total
+node: total/IsInitialized/VarIsInitializedOp
+node: total/Assign
+node: total/Read/ReadVariableOp
+node: count/Initializer/zeros
+node: count
+node: count/IsInitialized/VarIsInitializedOp
+node: count/Assign
+node: count/Read/ReadVariableOp
+node: total_1/Initializer/zeros
+node: total_1
+node: total_1/IsInitialized/VarIsInitializedOp
+node: total_1/Assign
+node: total_1/Read/ReadVariableOp
+node: count_1/Initializer/zeros
+node: count_1
+node: count_1/IsInitialized/VarIsInitializedOp
+node: count_1/Assign
+node: count_1/Read/ReadVariableOp
+node: Adam/iter
+node: Adam/iter/Read/ReadVariableOp
+node: Adam/beta_1
+node: Adam/beta_1/Read/ReadVariableOp
+node: Adam/beta_2
+node: Adam/beta_2/Read/ReadVariableOp
+node: Adam/decay
+node: Adam/decay/Read/ReadVariableOp
+node: Adam/learning_rate
+node: Adam/learning_rate/Read/ReadVariableOp
+node: dense/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense/kernel/m/Initializer/zeros/Const
+node: dense/kernel/m/Initializer/zeros
+node: dense/kernel/m
+node: dense/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense/kernel/m/Assign
+node: dense/kernel/m/Read/ReadVariableOp
+node: dense/bias/m/Initializer/zeros
+node: dense/bias/m
+node: dense/bias/m/IsInitialized/VarIsInitializedOp
+node: dense/bias/m/Assign
+node: dense/bias/m/Read/ReadVariableOp
+node: dense_1/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense_1/kernel/m/Initializer/zeros/Const
+node: dense_1/kernel/m/Initializer/zeros
+node: dense_1/kernel/m
+node: dense_1/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/m/Assign
+node: dense_1/kernel/m/Read/ReadVariableOp
+node: dense_1/bias/m/Initializer/zeros
+node: dense_1/bias/m
+node: dense_1/bias/m/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/m/Assign
+node: dense_1/bias/m/Read/ReadVariableOp
+node: dense/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense/kernel/v/Initializer/zeros/Const
+node: dense/kernel/v/Initializer/zeros
+node: dense/kernel/v
+node: dense/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense/kernel/v/Assign
+node: dense/kernel/v/Read/ReadVariableOp
+node: dense/bias/v/Initializer/zeros
+node: dense/bias/v
+node: dense/bias/v/IsInitialized/VarIsInitializedOp
+node: dense/bias/v/Assign
+node: dense/bias/v/Read/ReadVariableOp
+node: dense_1/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense_1/kernel/v/Initializer/zeros/Const
+node: dense_1/kernel/v/Initializer/zeros
+node: dense_1/kernel/v
+node: dense_1/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/v/Assign
+node: dense_1/kernel/v/Read/ReadVariableOp
+node: dense_1/bias/v/Initializer/zeros
+node: dense_1/bias/v
+node: dense_1/bias/v/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/v/Assign
+node: dense_1/bias/v/Read/ReadVariableOp
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+node: Const
+node: RestoreV2/tensor_names
+node: RestoreV2/shape_and_slices
+node: RestoreV2
+node: Identity
+node: AssignVariableOp
+node: RestoreV2_1/tensor_names
+node: RestoreV2_1/shape_and_slices
+node: RestoreV2_1
+node: Identity_1
+node: AssignVariableOp_1
+node: RestoreV2_2/tensor_names
+node: RestoreV2_2/shape_and_slices
+node: RestoreV2_2
+node: Identity_2
+node: AssignVariableOp_2
+node: RestoreV2_3/tensor_names
+node: RestoreV2_3/shape_and_slices
+node: RestoreV2_3
+node: Identity_3
+node: AssignVariableOp_3
+node: RestoreV2_4/tensor_names
+node: RestoreV2_4/shape_and_slices
+node: RestoreV2_4
+node: Identity_4
+node: AssignVariableOp_4
+node: RestoreV2_5/tensor_names
+node: RestoreV2_5/shape_and_slices
+node: RestoreV2_5
+node: Identity_5
+node: AssignVariableOp_5
+node: RestoreV2_6/tensor_names
+node: RestoreV2_6/shape_and_slices
+node: RestoreV2_6
+node: Identity_6
+node: AssignVariableOp_6
+node: RestoreV2_7/tensor_names
+node: RestoreV2_7/shape_and_slices
+node: RestoreV2_7
+node: Identity_7
+node: AssignVariableOp_7
+node: RestoreV2_8/tensor_names
+node: RestoreV2_8/shape_and_slices
+node: RestoreV2_8
+node: Identity_8
+node: AssignVariableOp_8
+node: Identity_9
+node: AssignVariableOp_9
+node: Identity_10
+node: AssignVariableOp_10
+node: Identity_11
+node: AssignVariableOp_11
+node: Identity_12
+node: AssignVariableOp_12
+node: Identity_13
+node: AssignVariableOp_13
+node: Identity_14
+node: AssignVariableOp_14
+node: Identity_15
+node: AssignVariableOp_15
+node: Identity_16
+node: AssignVariableOp_16
+node: Identity_17
+node: AssignVariableOp_17
+node: Identity_18
+node: AssignVariableOp_18
+node: Identity_19
+node: AssignVariableOp_19
+node: Identity_20
+node: AssignVariableOp_20
+node: dense_1_target
+node: total_2/Initializer/zeros
+node: total_2
+node: total_2/IsInitialized/VarIsInitializedOp
+node: total_2/Assign
+node: total_2/Read/ReadVariableOp
+node: count_2/Initializer/zeros
+node: count_2
+node: count_2/IsInitialized/VarIsInitializedOp
+node: count_2/Assign
+node: count_2/Read/ReadVariableOp
+node: metrics/accuracy/Squeeze
+node: metrics/accuracy/ArgMax/dimension
+node: metrics/accuracy/ArgMax
+node: metrics/accuracy/Cast
+node: metrics/accuracy/Equal
+node: metrics/accuracy/Cast_1
+node: metrics/accuracy/Const
+node: metrics/accuracy/Sum
+node: metrics/accuracy/AssignAddVariableOp
+node: metrics/accuracy/ReadVariableOp
+node: metrics/accuracy/Size
+node: metrics/accuracy/Cast_2
+node: metrics/accuracy/AssignAddVariableOp_1
+node: metrics/accuracy/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan/ReadVariableOp
+node: metrics/accuracy/div_no_nan/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan
+node: metrics/accuracy/Identity
+node: loss/dense_1_loss/Cast
+node: loss/dense_1_loss/Shape
+node: loss/dense_1_loss/Reshape/shape
+node: loss/dense_1_loss/Reshape
+node: loss/dense_1_loss/strided_slice/stack
+node: loss/dense_1_loss/strided_slice/stack_1
+node: loss/dense_1_loss/strided_slice/stack_2
+node: loss/dense_1_loss/strided_slice
+node: loss/dense_1_loss/Reshape_1/shape/0
+node: loss/dense_1_loss/Reshape_1/shape
+node: loss/dense_1_loss/Reshape_1
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/Shape
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/SparseSoftmaxCrossEntropyWithLogits
+node: loss/dense_1_loss/weighted_loss/Cast/x
+node: loss/dense_1_loss/weighted_loss/Mul
+node: loss/dense_1_loss/Const
+node: loss/dense_1_loss/Sum
+node: loss/dense_1_loss/num_elements
+node: loss/dense_1_loss/num_elements/Cast
+node: loss/dense_1_loss/Const_1
+node: loss/dense_1_loss/Sum_1
+node: loss/dense_1_loss/value
+node: loss/mul/x
+node: loss/mul
+node: VarIsInitializedOp
+node: VarIsInitializedOp_1
+node: VarIsInitializedOp_2
+node: VarIsInitializedOp_3
+node: VarIsInitializedOp_4
+node: VarIsInitializedOp_5
+node: VarIsInitializedOp_6
+node: VarIsInitializedOp_7
+node: VarIsInitializedOp_8
+node: VarIsInitializedOp_9
+node: VarIsInitializedOp_10
+node: VarIsInitializedOp_11
+node: VarIsInitializedOp_12
+node: VarIsInitializedOp_13
+node: VarIsInitializedOp_14
+node: VarIsInitializedOp_15
+node: VarIsInitializedOp_16
+node: VarIsInitializedOp_17
+node: init
+len node1 265
+INFO:tensorflow:Froze 4 variables.
+INFO:tensorflow:Converted 4 variables to const ops.
+##################################################################
+node: kernel
+node: bias
+node: kernel_1
+node: bias_1
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+length of  node 13
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+284
+285
+4、调用pb模型进行推理
+同样，有两个可以进行推理的pb,分别来自不同的转换源
+
+4.1 h5 pb的推理
+输入输出结点名称要参考上文中转pb过程中确定的input name 和output name
+
+#use tf1.14 and tf2.x with pb to load the data are both ok
+import tensorflow as tf 
+from PIL import Image
+import numpy as np
+
+def load_graph(file_path):
+    with tf.io.gfile.GFile(file_path,'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
+        graph_def.ParseFromString(f.read())
+    with tf.compat.v1.Graph().as_default() as graph:
+        tf.import_graph_def(graph_def,input_map = None,return_elements = None,name = "",op_dict = None,producer_op_list = None)
+    graph_nodes = [n for n in graph_def.node]
+    return graph,graph_nodes
+def main():
+    file_path='./models/lenet5_h5.pb'
+    img= np.array(Image.open('5.png')).reshape(1,28,28,1)/255.0
+    graph,graph_nodes = load_graph(file_path)
+    print("num nodes",len(graph_nodes))
+    for node in graph_nodes:
+        print('node:', node.name)
+
+    input_node = graph.get_tensor_by_name('flatten_input:0')
+    print("input_node.shape:",input_node.shape)
+    output = graph.get_tensor_by_name('dense_1/Softmax:0')  
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.compat.v1.Session(graph=graph,config=config) as sess:
+        logits = sess.run(output, feed_dict = {input_node:img})
+    print("logits:",logits)
+    np.save('out_results/h5pb_result.npy',logits)
+main()
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+WARNING:tensorflow:From <ipython-input-16-1008fb2da38b>:11: calling import_graph_def (from tensorflow.python.framework.importer) with op_dict is deprecated and will be removed in a future version.
+Instructions for updating:
+Please file an issue at https://github.com/tensorflow/tensorflow/issues if you depend on this feature.
+num nodes 17
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel
+node: dense/bias
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel
+node: dense_1/bias
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+input_node.shape: (None, 28, 28, 1)
+logits: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+4.2 saved pb的推理
+#use tf1.14 and tf2.x with pb to load the data are both ok
+import tensorflow as tf 
+from PIL import Image
+import numpy as np
+
+def load_graph(file_path):
+    with tf.io.gfile.GFile(file_path,'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
+        graph_def.ParseFromString(f.read())
+    with tf.compat.v1.Graph().as_default() as graph:
+        tf.import_graph_def(graph_def,input_map = None,return_elements = None,name = "",op_dict = None,producer_op_list = None)
+    graph_nodes = [n for n in graph_def.node]
+    return graph,graph_nodes
+def main():
+    file_path='./models/lenet5_savedmodel.pb'
+    img= np.array(Image.open('5.png')).reshape(1,28,28,1)/255.0
+    graph,graph_nodes = load_graph(file_path)
+    print("num nodes",len(graph_nodes))
+    for node in graph_nodes:
+        print('node:', node.name)
+
+    input_node = graph.get_tensor_by_name('input_1:0')
+    print("input_node.shape:",input_node.shape)
+    output = graph.get_tensor_by_name('dense_1/Softmax:0')  
+
+    with tf.compat.v1.Session(graph=graph) as sess:
+        logits = sess.run(output, feed_dict = {input_node:img})
+    print("logits:",logits)
+    np.save('out_results/savedmodelpb_result.npy',logits)
+main()
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+num nodes 17
+node: kernel
+node: bias
+node: kernel_1
+node: bias_1
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+input_node.shape: (None, 28, 28, 1)
+logits: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+5、h5和saved 尝试互转
+从以上可以看出，h5 可以转pb,saved model也可以转pb,并且，都可以进行推理，并且结果正确
+还未看到h5模型是否能和saved model互转下面将试一下
+5.1 h5转saved
+def main():
+    file_path='./models/lenet5.h5'
+    model = tf.keras.models.load_model(file_path)
+    model.save('./models/h5tosaved',save_format='tf')
+    
+main()
+1
+2
+3
+4
+5
+6
+INFO:tensorflow:Assets written to: ./models/h5tosaved/assets
+1
+看起来是转成功了，那么用这个转换后的模型进行推理来难证正确性
+
+5.1.1 h5 转saved后的模型推理
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+    
+def savedmodel_infer(model_path=None,img=None):
+    model = tf.keras.models.load_model(model_path)
+    result= model.predict(img)
+    return result
+
+def main():
+    model_path = "models/h5tosaved"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= np.array(img).reshape(1,28,28,1)/255.0
+    result = savedmodel_infer(model_path,img)
+    print("result.shape",result.shape)
+    print(result)
+    np.save('out_results/h5tosavedmodel_result.npy',result)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+result.shape (1, 10)
+[[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+在这里插入图片描述
+
+另一种方法
+
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+from tensorflow.python.saved_model import tag_constants
+
+def savedmodel_infer(model_path=None,img=None):
+    saved_model_loaded = tf.saved_model.load(model_path, tags=[tag_constants.SERVING])
+    model = saved_model_loaded.signatures['serving_default']
+    result= model(img)
+    return result
+
+def main():
+    model_path = "models/h5tosaved"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= tf.constant(np.array(img).astype(np.float32).reshape(1,28,28,1)/255.0)
+    result = savedmodel_infer(model_path,img)
+    print(result) #获取的结果是个字典
+    for k,v in result.items(): #key 是layername 
+        value=v.numpy()
+    print('k=%s with value:'% k,value)
+    np.save('out_results/h5tosavedmodelanother_result.npy',value)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+{'dense_1': <tf.Tensor: shape=(1, 10), dtype=float32, numpy=
+array([[2.6573987e-14, 1.6878349e-10, 1.6627098e-07, 1.4200980e-04,
+        1.8240679e-23, 9.9985778e-01, 4.3281314e-16, 4.1571907e-12,
+        2.4773154e-12, 3.5959408e-10]], dtype=float32)>}
+k=dense_1 with value: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+在这里插入图片描述
+
+5.1.2 h5转saved后的模型转pb
+import tensorflow as tf
+
+def freeze_session(model_path=None,clear_devices=True):
+    tf.compat.v1.reset_default_graph()
+    session=tf.compat.v1.keras.backend.get_session()
+    graph = session.graph
+    with graph.as_default():
+        model = tf.keras.models.load_model(model_path)
+        output_names = [out.op.name for out in model.outputs]
+        print("output_names",output_names)
+        input_names =[innode.op.name for innode in model.inputs]
+        print("input_names",input_names)        
+        input_graph_def = graph.as_graph_def()
+        for node in input_graph_def.node:
+            print('node:', node.name)
+        print("len node1",len(input_graph_def.node))
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph =  tf.compat.v1.graph_util.convert_variables_to_constants(session, input_graph_def,
+                                                      output_names)
+        
+        outgraph = tf.compat.v1.graph_util.remove_training_nodes(frozen_graph)#去掉与推理无关的内容
+        print("##################################################################")
+        for node in outgraph.node:
+            print('node:', node.name)
+        print("length of  node",len(outgraph.node))
+        tf.io.write_graph(frozen_graph, "./models", "h5tosaved_savedmodel.pb", as_text=False)
+
+def main():  
+
+    freeze_session("models/h5tosaved",True)
+    
+
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+output_names ['dense_1/Softmax']
+input_names ['input_1']
+node: kernel/Initializer/random_uniform/shape
+node: kernel/Initializer/random_uniform/min
+node: kernel/Initializer/random_uniform/max
+node: kernel/Initializer/random_uniform/RandomUniform
+node: kernel/Initializer/random_uniform/sub
+node: kernel/Initializer/random_uniform/mul
+node: kernel/Initializer/random_uniform
+node: kernel
+node: kernel/IsInitialized/VarIsInitializedOp
+node: kernel/Assign
+node: kernel/Read/ReadVariableOp
+node: bias/Initializer/zeros
+node: bias
+node: bias/IsInitialized/VarIsInitializedOp
+node: bias/Assign
+node: bias/Read/ReadVariableOp
+node: kernel_1/Initializer/random_uniform/shape
+node: kernel_1/Initializer/random_uniform/min
+node: kernel_1/Initializer/random_uniform/max
+node: kernel_1/Initializer/random_uniform/RandomUniform
+node: kernel_1/Initializer/random_uniform/sub
+node: kernel_1/Initializer/random_uniform/mul
+node: kernel_1/Initializer/random_uniform
+node: kernel_1
+node: kernel_1/IsInitialized/VarIsInitializedOp
+node: kernel_1/Assign
+node: kernel_1/Read/ReadVariableOp
+node: bias_1/Initializer/zeros
+node: bias_1
+node: bias_1/IsInitialized/VarIsInitializedOp
+node: bias_1/Assign
+node: bias_1/Read/ReadVariableOp
+node: iter
+node: iter/Read/ReadVariableOp
+node: beta_1
+node: beta_1/Read/ReadVariableOp
+node: beta_2
+node: beta_2/Read/ReadVariableOp
+node: decay
+node: decay/Read/ReadVariableOp
+node: learning_rate
+node: learning_rate/Read/ReadVariableOp
+node: dense_6/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense_6/kernel/m/Initializer/zeros/Const
+node: dense_6/kernel/m/Initializer/zeros
+node: dense_6/kernel/m
+node: dense_6/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense_6/kernel/m/Assign
+node: dense_6/kernel/m/Read/ReadVariableOp
+node: dense_6/bias/m/Initializer/zeros
+node: dense_6/bias/m
+node: dense_6/bias/m/IsInitialized/VarIsInitializedOp
+node: dense_6/bias/m/Assign
+node: dense_6/bias/m/Read/ReadVariableOp
+node: dense_1_5/kernel/m/Initializer/zeros/shape_as_tensor
+node: dense_1_5/kernel/m/Initializer/zeros/Const
+node: dense_1_5/kernel/m/Initializer/zeros
+node: dense_1_5/kernel/m
+node: dense_1_5/kernel/m/IsInitialized/VarIsInitializedOp
+node: dense_1_5/kernel/m/Assign
+node: dense_1_5/kernel/m/Read/ReadVariableOp
+node: dense_1_5/bias/m/Initializer/zeros
+node: dense_1_5/bias/m
+node: dense_1_5/bias/m/IsInitialized/VarIsInitializedOp
+node: dense_1_5/bias/m/Assign
+node: dense_1_5/bias/m/Read/ReadVariableOp
+node: dense_6/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense_6/kernel/v/Initializer/zeros/Const
+node: dense_6/kernel/v/Initializer/zeros
+node: dense_6/kernel/v
+node: dense_6/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense_6/kernel/v/Assign
+node: dense_6/kernel/v/Read/ReadVariableOp
+node: dense_6/bias/v/Initializer/zeros
+node: dense_6/bias/v
+node: dense_6/bias/v/IsInitialized/VarIsInitializedOp
+node: dense_6/bias/v/Assign
+node: dense_6/bias/v/Read/ReadVariableOp
+node: dense_1_5/kernel/v/Initializer/zeros/shape_as_tensor
+node: dense_1_5/kernel/v/Initializer/zeros/Const
+node: dense_1_5/kernel/v/Initializer/zeros
+node: dense_1_5/kernel/v
+node: dense_1_5/kernel/v/IsInitialized/VarIsInitializedOp
+node: dense_1_5/kernel/v/Assign
+node: dense_1_5/kernel/v/Read/ReadVariableOp
+node: dense_1_5/bias/v/Initializer/zeros
+node: dense_1_5/bias/v
+node: dense_1_5/bias/v/IsInitialized/VarIsInitializedOp
+node: dense_1_5/bias/v/Assign
+node: dense_1_5/bias/v/Read/ReadVariableOp
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+node: Const
+node: RestoreV2/tensor_names
+node: RestoreV2/shape_and_slices
+node: RestoreV2
+node: Identity
+node: AssignVariableOp
+node: RestoreV2_1/tensor_names
+node: RestoreV2_1/shape_and_slices
+node: RestoreV2_1
+node: Identity_1
+node: AssignVariableOp_1
+node: RestoreV2_2/tensor_names
+node: RestoreV2_2/shape_and_slices
+node: RestoreV2_2
+node: Identity_2
+node: AssignVariableOp_2
+node: RestoreV2_3/tensor_names
+node: RestoreV2_3/shape_and_slices
+node: RestoreV2_3
+node: Identity_3
+node: AssignVariableOp_3
+node: RestoreV2_4/tensor_names
+node: RestoreV2_4/shape_and_slices
+node: RestoreV2_4
+node: Identity_4
+node: AssignVariableOp_4
+node: RestoreV2_5/tensor_names
+node: RestoreV2_5/shape_and_slices
+node: RestoreV2_5
+node: Identity_5
+node: AssignVariableOp_5
+node: RestoreV2_6/tensor_names
+node: RestoreV2_6/shape_and_slices
+node: RestoreV2_6
+node: Identity_6
+node: AssignVariableOp_6
+node: RestoreV2_7/tensor_names
+node: RestoreV2_7/shape_and_slices
+node: RestoreV2_7
+node: Identity_7
+node: AssignVariableOp_7
+node: RestoreV2_8/tensor_names
+node: RestoreV2_8/shape_and_slices
+node: RestoreV2_8
+node: Identity_8
+node: AssignVariableOp_8
+node: Identity_9
+node: AssignVariableOp_9
+node: Identity_10
+node: AssignVariableOp_10
+node: Identity_11
+node: AssignVariableOp_11
+node: Identity_12
+node: AssignVariableOp_12
+node: Identity_13
+node: AssignVariableOp_13
+node: Identity_14
+node: AssignVariableOp_14
+node: Identity_15
+node: AssignVariableOp_15
+node: Identity_16
+node: AssignVariableOp_16
+node: dense_1_target
+node: total/Initializer/zeros
+node: total
+node: total/IsInitialized/VarIsInitializedOp
+node: total/Assign
+node: total/Read/ReadVariableOp
+node: count/Initializer/zeros
+node: count
+node: count/IsInitialized/VarIsInitializedOp
+node: count/Assign
+node: count/Read/ReadVariableOp
+node: metrics/accuracy/Squeeze
+node: metrics/accuracy/ArgMax/dimension
+node: metrics/accuracy/ArgMax
+node: metrics/accuracy/Cast
+node: metrics/accuracy/Equal
+node: metrics/accuracy/Cast_1
+node: metrics/accuracy/Const
+node: metrics/accuracy/Sum
+node: metrics/accuracy/AssignAddVariableOp
+node: metrics/accuracy/ReadVariableOp
+node: metrics/accuracy/Size
+node: metrics/accuracy/Cast_2
+node: metrics/accuracy/AssignAddVariableOp_1
+node: metrics/accuracy/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan/ReadVariableOp
+node: metrics/accuracy/div_no_nan/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan
+node: metrics/accuracy/Identity
+node: loss/dense_1_loss/Cast
+node: loss/dense_1_loss/Shape
+node: loss/dense_1_loss/Reshape/shape
+node: loss/dense_1_loss/Reshape
+node: loss/dense_1_loss/strided_slice/stack
+node: loss/dense_1_loss/strided_slice/stack_1
+node: loss/dense_1_loss/strided_slice/stack_2
+node: loss/dense_1_loss/strided_slice
+node: loss/dense_1_loss/Reshape_1/shape/0
+node: loss/dense_1_loss/Reshape_1/shape
+node: loss/dense_1_loss/Reshape_1
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/Shape
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/SparseSoftmaxCrossEntropyWithLogits
+node: loss/dense_1_loss/weighted_loss/Cast/x
+node: loss/dense_1_loss/weighted_loss/Mul
+node: loss/dense_1_loss/Const
+node: loss/dense_1_loss/Sum
+node: loss/dense_1_loss/num_elements
+node: loss/dense_1_loss/num_elements/Cast
+node: loss/dense_1_loss/Const_1
+node: loss/dense_1_loss/Sum_1
+node: loss/dense_1_loss/value
+node: loss/mul/x
+node: loss/mul
+node: VarIsInitializedOp
+node: VarIsInitializedOp_1
+node: VarIsInitializedOp_2
+node: VarIsInitializedOp_3
+node: VarIsInitializedOp_4
+node: VarIsInitializedOp_5
+node: VarIsInitializedOp_6
+node: VarIsInitializedOp_7
+node: VarIsInitializedOp_8
+node: VarIsInitializedOp_9
+node: VarIsInitializedOp_10
+node: VarIsInitializedOp_11
+node: VarIsInitializedOp_12
+node: VarIsInitializedOp_13
+node: init
+len node1 233
+INFO:tensorflow:Froze 4 variables.
+INFO:tensorflow:Converted 4 variables to const ops.
+##################################################################
+node: kernel
+node: bias
+node: kernel_1
+node: bias_1
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+length of  node 13
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+5.1.3 h5转saved模型后转pb推理
+#use tf1.14 and tf2.x with pb to load the data are both ok
+import tensorflow as tf 
+from PIL import Image
+import numpy as np
+
+def load_graph(file_path):
+    with tf.io.gfile.GFile(file_path,'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
+        graph_def.ParseFromString(f.read())
+    with tf.compat.v1.Graph().as_default() as graph:
+        tf.import_graph_def(graph_def,input_map = None,return_elements = None,name = "",op_dict = None,producer_op_list = None)
+    graph_nodes = [n for n in graph_def.node]
+    return graph,graph_nodes
+def main():
+    file_path='./models/h5tosaved_savedmodel.pb'
+    img= np.array(Image.open('5.png')).reshape(1,28,28,1)/255.0
+    graph,graph_nodes = load_graph(file_path)
+    print("num nodes",len(graph_nodes))
+    for node in graph_nodes:
+        print('node:', node.name)
+
+    input_node = graph.get_tensor_by_name('input_1:0')
+    print("input_node.shape:",input_node.shape)
+    output = graph.get_tensor_by_name('dense_1/Softmax:0')  
+
+    with tf.compat.v1.Session(graph=graph) as sess:
+        logits = sess.run(output, feed_dict = {input_node:img})
+    print("logits:",logits)
+    np.save('out_results/h5tosaved_savedmodelpb_result.npy',logits)
+main()
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+num nodes 17
+node: kernel
+node: bias
+node: kernel_1
+node: bias_1
+node: input_1
+node: flatten/Const
+node: flatten/Reshape
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+input_node.shape: (None, 28, 28, 1)
+logits: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+以上过程说明，h5转saved没问题，以后saved转pb也是可以
+
+5.2 saved model转h5
+def main():
+    file_path='./models/lenet5'
+    model = tf.keras.models.load_model(file_path)
+    model.save('./models/savedtoh5.h5',save_format='h5')
+    
+main()
+1
+2
+3
+4
+5
+6
+5.2.1 saved转h5后的模型推理
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import matplotlib.pyplot as plt
+    
+def h5_infer(model_path=None,img=None):
+    model = tf.keras.models.load_model(model_path)
+    result= model.predict(img)
+    return result
+
+def main():
+    model_path = "models/savedtoh5.h5"
+    img = Image.open('5.png')
+    plt.imshow(img)
+    img= np.array(img).reshape(1,28,28,1)/255.0
+    result = h5_infer(model_path,img)
+    print("result.shape",result.shape)
+    print(result)
+    np.save('out_results/savedtoh5_result.npy',result)#保存结果，方便以后比较
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+result.shape (1, 10)
+[[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+在这里插入图片描述
+
+5.2.2 saved 转h5后的模型转pb
+# use tf2.x(tf1.14 also ok) to convert the model hdf5 trained by tf2.x to pb
+import tensorflow as tf
+
+def freeze_session(model_path=None,clear_devices=True):
+    tf.compat.v1.reset_default_graph()
+    session=tf.compat.v1.keras.backend.get_session()
+    graph = session.graph
+    with graph.as_default():
+        model = tf.keras.models.load_model(model_path)
+        output_names = [out.op.name for out in model.outputs]
+        print("output_names",output_names)
+        input_names =[innode.op.name for innode in model.inputs]
+        print("input_names",input_names)
+        input_graph_def = graph.as_graph_def()
+        for node in input_graph_def.node:
+            print('node:', node.name)
+        print("len node1",len(input_graph_def.node))
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph =  tf.compat.v1.graph_util.convert_variables_to_constants(session, input_graph_def,
+                                                      output_names)
+        
+        outgraph = tf.compat.v1.graph_util.remove_training_nodes(frozen_graph)#去掉与推理无关的内容
+        print("##################################################################")
+        for node in outgraph.node:
+            print('node:', node.name)
+        print("length of  node",len(outgraph.node))
+        tf.io.write_graph(frozen_graph, "./models", "savedtoh5_h5.pb", as_text=False)
+        return outgraph
+
+def main():  
+
+    freeze_session("models/savedtoh5.h5",True)
+
+main()
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+output_names ['dense_1/Softmax']
+input_names ['flatten_input']
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel/Initializer/random_uniform/shape
+node: dense/kernel/Initializer/random_uniform/min
+node: dense/kernel/Initializer/random_uniform/max
+node: dense/kernel/Initializer/random_uniform/RandomUniform
+node: dense/kernel/Initializer/random_uniform/sub
+node: dense/kernel/Initializer/random_uniform/mul
+node: dense/kernel/Initializer/random_uniform
+node: dense/kernel
+node: dense/kernel/IsInitialized/VarIsInitializedOp
+node: dense/kernel/Assign
+node: dense/kernel/Read/ReadVariableOp
+node: dense/bias/Initializer/zeros
+node: dense/bias
+node: dense/bias/IsInitialized/VarIsInitializedOp
+node: dense/bias/Assign
+node: dense/bias/Read/ReadVariableOp
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel/Initializer/random_uniform/shape
+node: dense_1/kernel/Initializer/random_uniform/min
+node: dense_1/kernel/Initializer/random_uniform/max
+node: dense_1/kernel/Initializer/random_uniform/RandomUniform
+node: dense_1/kernel/Initializer/random_uniform/sub
+node: dense_1/kernel/Initializer/random_uniform/mul
+node: dense_1/kernel/Initializer/random_uniform
+node: dense_1/kernel
+node: dense_1/kernel/IsInitialized/VarIsInitializedOp
+node: dense_1/kernel/Assign
+node: dense_1/kernel/Read/ReadVariableOp
+node: dense_1/bias/Initializer/zeros
+node: dense_1/bias
+node: dense_1/bias/IsInitialized/VarIsInitializedOp
+node: dense_1/bias/Assign
+node: dense_1/bias/Read/ReadVariableOp
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+node: Placeholder
+node: AssignVariableOp
+node: ReadVariableOp
+node: Placeholder_1
+node: AssignVariableOp_1
+node: ReadVariableOp_1
+node: Placeholder_2
+node: AssignVariableOp_2
+node: ReadVariableOp_2
+node: Placeholder_3
+node: AssignVariableOp_3
+node: ReadVariableOp_3
+node: VarIsInitializedOp
+node: VarIsInitializedOp_1
+node: VarIsInitializedOp_2
+node: VarIsInitializedOp_3
+node: init
+node: dense_1_target
+node: total/Initializer/zeros
+node: total
+node: total/IsInitialized/VarIsInitializedOp
+node: total/Assign
+node: total/Read/ReadVariableOp
+node: count/Initializer/zeros
+node: count
+node: count/IsInitialized/VarIsInitializedOp
+node: count/Assign
+node: count/Read/ReadVariableOp
+node: metrics/accuracy/Squeeze
+node: metrics/accuracy/ArgMax/dimension
+node: metrics/accuracy/ArgMax
+node: metrics/accuracy/Cast
+node: metrics/accuracy/Equal
+node: metrics/accuracy/Cast_1
+node: metrics/accuracy/Const
+node: metrics/accuracy/Sum
+node: metrics/accuracy/AssignAddVariableOp
+node: metrics/accuracy/ReadVariableOp
+node: metrics/accuracy/Size
+node: metrics/accuracy/Cast_2
+node: metrics/accuracy/AssignAddVariableOp_1
+node: metrics/accuracy/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan/ReadVariableOp
+node: metrics/accuracy/div_no_nan/ReadVariableOp_1
+node: metrics/accuracy/div_no_nan
+node: metrics/accuracy/Identity
+node: loss/dense_1_loss/Cast
+node: loss/dense_1_loss/Shape
+node: loss/dense_1_loss/Reshape/shape
+node: loss/dense_1_loss/Reshape
+node: loss/dense_1_loss/strided_slice/stack
+node: loss/dense_1_loss/strided_slice/stack_1
+node: loss/dense_1_loss/strided_slice/stack_2
+node: loss/dense_1_loss/strided_slice
+node: loss/dense_1_loss/Reshape_1/shape/0
+node: loss/dense_1_loss/Reshape_1/shape
+node: loss/dense_1_loss/Reshape_1
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/Shape
+node: loss/dense_1_loss/SparseSoftmaxCrossEntropyWithLogits/SparseSoftmaxCrossEntropyWithLogits
+node: loss/dense_1_loss/weighted_loss/Cast/x
+node: loss/dense_1_loss/weighted_loss/Mul
+node: loss/dense_1_loss/Const
+node: loss/dense_1_loss/Sum
+node: loss/dense_1_loss/num_elements
+node: loss/dense_1_loss/num_elements/Cast
+node: loss/dense_1_loss/Const_1
+node: loss/dense_1_loss/Sum_1
+node: loss/dense_1_loss/value
+node: loss/mul/x
+node: loss/mul
+len node1 115
+INFO:tensorflow:Froze 4 variables.
+INFO:tensorflow:Converted 4 variables to const ops.
+##################################################################
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel
+node: dense/bias
+node: dense/MatMul
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel
+node: dense_1/bias
+node: dense_1/MatMul
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+length of  node 13
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+5.2.3 saved转h5后模型转pb后的推理
+#use tf1.14 and tf2.x with pb to load the data are both ok
+import tensorflow as tf 
+from PIL import Image
+import numpy as np
+
+def load_graph(file_path):
+    with tf.io.gfile.GFile(file_path,'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
+        graph_def.ParseFromString(f.read())
+    with tf.compat.v1.Graph().as_default() as graph:
+        tf.import_graph_def(graph_def,input_map = None,return_elements = None,name = "",op_dict = None,producer_op_list = None)
+    graph_nodes = [n for n in graph_def.node]
+    return graph,graph_nodes
+def main():
+    file_path='./models/savedtoh5_h5.pb'
+    img= np.array(Image.open('5.png')).reshape(1,28,28,1)/255.0
+    graph,graph_nodes = load_graph(file_path)
+    print("num nodes",len(graph_nodes))
+    for node in graph_nodes:
+        print('node:', node.name)
+
+    input_node = graph.get_tensor_by_name('flatten_input:0')
+    print("input_node.shape:",input_node.shape)
+    output = graph.get_tensor_by_name('dense_1/Softmax:0')  
+
+    with tf.compat.v1.Session(graph=graph) as sess:
+        logits = sess.run(output, feed_dict = {input_node:img})
+    print("logits:",logits)
+    np.save('out_results/savedtoh5_pb_result.npy',logits)
+main()
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+num nodes 17
+node: flatten_input
+node: flatten/Const
+node: flatten/Reshape
+node: dense/kernel
+node: dense/bias
+node: dense/MatMul/ReadVariableOp
+node: dense/MatMul
+node: dense/BiasAdd/ReadVariableOp
+node: dense/BiasAdd
+node: dense/Relu
+node: dense_1/kernel
+node: dense_1/bias
+node: dense_1/MatMul/ReadVariableOp
+node: dense_1/MatMul
+node: dense_1/BiasAdd/ReadVariableOp
+node: dense_1/BiasAdd
+node: dense_1/Softmax
+input_node.shape: (None, 28, 28, 1)
+logits: [[2.6573987e-14 1.6878349e-10 1.6627098e-07 1.4200980e-04 1.8240679e-23
+  9.9985778e-01 4.3281314e-16 4.1571907e-12 2.4773154e-12 3.5959408e-10]]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+6、互转部分总结
+对于所有模型的互转我们在精度上和模型大小上进行总结。因为这前把所有推理结果都保存了，自然就直接可以对比的
+
+6.1 精度对比
+所有模型的结果都保存在out_results中，都读取出来然后进行比较
+
+import numpy as np
+# h5模型结果
+h5_result=np.load('out_results/h5_result.npy')
+# h5转pb后的pb模型的结果
+h5pb_result=np.load('out_results/h5pb_result.npy')
+# h5转savedmodel的模型的结果
+h5tosavedmodel_result=np.load('out_results/h5tosavedmodel_result.npy')
+# h5转savedmodel的模型的另一种调用方法做的结果，也就是说模型相同，但调用方法不同
+h5tosavedmodelanother_result=np.load('out_results/h5tosavedmodelanother_result.npy')
+############################分割线################################
+#saved model 结果
+savedmodel_result=np.load('out_results/savedmodel_result.npy')
+#saved model 另一种调用方式的结果
+savedmodelanother_result=np.load('out_results/savedmodelanother_result.npy')
+#saved model 转pb 的结果
+savedmodelpb_result=np.load('out_results/savedmodelpb_result.npy')
+#saved 模型转h5模型的推理结果
+savedtoh5_result=np.load('out_results/savedtoh5_result.npy')
+#saved 模型转 h5后转pb的结果
+savedtoh5_pb_result=np.load('out_results/savedtoh5_pb_result.npy')
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+以上一共有10个结果我们都与第一个做对比即可
+
+np.testing.assert_array_almost_equal(h5_result,h5pb_result)
+np.testing.assert_array_almost_equal(h5_result,h5tosavedmodel_result)
+np.testing.assert_array_almost_equal(h5_result,h5tosavedmodelanother_result)
+np.testing.assert_array_almost_equal(h5_result,savedmodel_result)
+np.testing.assert_array_almost_equal(h5_result,savedmodelanother_result)
+np.testing.assert_array_almost_equal(h5_result,savedmodelpb_result)
+np.testing.assert_array_almost_equal(h5_result,savedtoh5_result)
+np.testing.assert_array_almost_equal(h5_result,savedtoh5_pb_result)
+1
+2
+3
+4
+5
+6
+7
+8
+以上代码执行过程中，没有报任何信息，说明所有结果全部相同
+
+6.2 模型大小对比
+一共有8个模型我们对比模型大小以及md5sum值来查看
+
+%%bash
+#各个h5模型的比较，有两个
+#第一个原始的h5模型
+du models/lenet5.h5
+md5sum -b models/lenet5.h5
+#第二个模型 saved 转换成的h5模型
+du models/savedtoh5.h5
+md5sum -b models/savedtoh5.h5
+1
+2
+3
+4
+5
+6
+7
+8
+4800	models/lenet5.h5
+810d4ceb0ac0c5de599528378b84c1a9 *models/lenet5.h5
+1604	models/savedtoh5.h5
+19067c2a5d4587521e2d77df582abd30 *models/savedtoh5.h5
+1
+2
+3
+4
+可以看到，saved model转的h5模型小不少，但是结果是一样的
+
+%%bash
+#所有saved model的比较，有两个
+#第一个是原始的saved model 
+du models/lenet5
+md5sum -b models/lenet5/saved_model.pb
+#第二个是h5转换的saved 模型
+du models/h5tosaved
+md5sum -b models/h5tosaved/saved_model.pb
+1
+2
+3
+4
+5
+6
+7
+8
+4784	models/lenet5/variables
+4	models/lenet5/assets
+4868	models/lenet5
+5064cad4d06f58b98c2013a34e65a658 *models/lenet5/saved_model.pb
+4784	models/h5tosaved/variables
+4	models/h5tosaved/assets
+4864	models/h5tosaved
+6a9a41e1f3e7ee543934faa793be2962 *models/h5tosaved/saved_model.pb
+1
+2
+3
+4
+5
+6
+7
+8
+从以上可以看出二都差不多大
+
+%%bash
+#所有pb模型的比较，共有四个
+#第一个h5转的pb
+du models/lenet5_h5.pb
+md5sum -b models/lenet5_h5.pb
+#第二个saved model转pb模型
+du models/lenet5_savedmodel.pb
+md5sum -b models/lenet5_savedmodel.pb
+#第三个模型是h5转savedmodel后再转的pb
+du models/h5tosaved_savedmodel.pb
+md5sum -b models/h5tosaved_savedmodel.pb
+#第四个saved 模型转h5再转pb模型
+du models/savedtoh5_h5.pb
+md5sum -b models/savedtoh5_h5.pb
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+1592	models/lenet5_h5.pb
+1c76f6947f41758bee1c0892877dfea2 *models/lenet5_h5.pb
+1636	models/lenet5_savedmodel.pb
+c37c6991c6192b11d88b890f13c953f0 *models/lenet5_savedmodel.pb
+1632	models/h5tosaved_savedmodel.pb
+a00a3395a985482bf2a3cc365505ec48 *models/h5tosaved_savedmodel.pb
+1592	models/savedtoh5_h5.pb
+a7239f1e842e761aaf75fb79ddfd0e04 *models/savedtoh5_h5.pb
+1
+2
+3
+4
+5
+6
+7
+8
+以上四个模型大小相差不大，但不完全相同，还不清楚是什么是原因
+
+总结：
+以上为本文第一部分,所用环境为tensorflow2.2gpu版
+
+h5和saved可以互转
+互转后的模型可以顺利完成后续所有工作，总的来说精度是一样的，大小saved model转h5模型最小，和所有pb差不多大
+pb模型结点名称各种h5转来的一样，saved model 转pb的名称一样
