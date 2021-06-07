@@ -1,0 +1,234 @@
+这两天GPU设备到了，然后搭建下环境，顺便记录安装流程（注意这里是Centos7），我们先看下安装tensorflow2.1 GPU和Pytorch1.3 GPU所需的环境。
+
+当前tensorflow的最新稳定版本是2.1，根据 官网 的要求:
+
+需要CUDA10.1、cuDNN7.6、TensorRT6.0（可选）
+
+当前Pytorch的最新稳定版本是1.3，根据 官网 的要求:
+
+需要 CUDA10.1 正好和Tensorflow2.1 GPU所需的CUDA版本一样，太棒了。
+
+安装流程
+先说下安装流程：
+
+安装NVIDIA驱动 （Tensorflow和Pytorch都需要的环境）
+安装CUDA10.1 （Tensorflow和Pytorch都需要的环境）
+安装cuDNN7.6 （Tensorflow和Pytorch都需要的环境）
+安装Tensorflow2.1 GPU （包括TensorRT6）
+安装Pytorch1.3 GPU
+下载链接：
+
+Nvidia驱动，按照你的GPU设备型号去选择对应驱动，注意CUDA Toolkti选项要选择10.1版本或以上，我这里选的是10.2
+
+
+CUDA10.1，说了10.1就下10.1不要给自己找麻烦。（这个下载需要注册账号，下面有我上传百度云的资源，大家可以自行下载）
+
+
+cuDNN 7.6.4.38（这个下载需要注册账号，下面有我上传百度云的资源，大家可以自行下载）
+
+
+TensorRT6.0 (这个是可选择安装的，不装也可以，这个下载需要注册账号，下面有我上传百度云的资源，大家可以自行下载)
+
+
+这里是我下载好的CUDA10.1、cuDNN7.6.4以及TensorRT-6.0.1.5，已上传网盘：
+https://pan.baidu.com/s/1vLuNw8Ph6baykF0uh-hGrQ
+提取码：zsm3
+
+1.NVIDIA驱动安装
+这个我就不细说了，网上有很多教程，主要是我的设备给我时驱动已经装好了。
+注意：Linux在安装nividia驱动前要先将BIOS中的的Secure Boot设置为Disabled
+注意：Linux在安装nividia驱动前要先将BIOS中的的Secure Boot设置为Disabled
+注意：Linux在安装nividia驱动前要先将BIOS中的的Secure Boot设置为Disabled
+Secure Boot是UEFI设置中的一个子规格，也就是一个参数设置选项，而这个选项的作用主要是在于主板上只能加载经过认证过的操作系统或者硬件驱动程序，来防止某些恶意软件的入侵（主要针对window系统，对Linux等其他操作系统并不友好）。
+
+安装完后怎么检查自己NVIDIA驱动是否安装成功，输入以下指令如果能够看到你的驱动信息以及GPU设备信息即可：
+
+nvidia-smi
+1
+
+
+2.CUDA10.1安装
+CUDA(ComputeUnified Device Architecture)，是显卡厂商NVIDIA推出的运算平台。 CUDA是一种由NVIDIA推出的通用并行计算架构，该架构使GPU能够解决复杂的计算问题。
+
+首先进入安装包所在的目录，打开终端，输入以下指令进行安装（需要root权限）：
+
+sudo sh ./cuda_10.1.105_418.39_linux.run
+1
+输入指令后首先会弹出如下界面，将Driver选项取消掉，将Driver选项取消掉 ，因为我们在第一步已经安装好了驱动，所以这里不需要安装，（通过键盘上下键选择选项，再通过回车键确定/取消），这里我们主要是安装 CUDA Toolkit 10.1 , CUDA Sample可以用来测试我们是否安装成功，其他的装不装无所谓。接着选择Install选项回车开始安装。这里CUDA会默认安装到 /etc/local/cuda-10.1/ 文件夹下，sample会默认安装到当前你所使用的用户主目录下 ~/
+
+
+安装完后如果你看到终端打印出如下信息（希望你不会看到）：
+
+那就说明缺少依赖信息（不要慌，打开终端通过以下指令安装即可，需要root权限）：
+
+sudo yum install mesa-libGLES.x86_64 mesa-libGL-devel.x86_64 
+sudo yum install mesa-libGLw.x86_64  mesa-libGLU-devel.x86_64 
+sudo yum install libXi-devel.x86_64 mesa-libGLw-devel.x86_64 
+sudo yum install freeglut.x86_64 freeglut-devel.x86_64 
+1
+2
+3
+4
+安装完成后，在按照刚刚的步骤再装一便CUDA就不会报缺少环境的问题了
+
+安装成功后，你会看到如下信息：
+首先提示的那个WARNING不用管，因为我们这里没有安装它包里自带的CUDA驱动（在第一步我们已经装过驱动了），不要慌。
+接着注意 Please make sure that 给的一些提示，提示我们需要将相关依赖添加到系统环境中。
+
+接着我们按照提示来添加下系统环境：
+首先打开/etc/profile文件，如果不习惯使用vim，可以用其他的编辑器打开
+
+sudo vim /etc/profile
+1
+在文件的最后加上以下信息并保存退出：
+
+export PATH=$PATH:/usr/local/cuda-10.1/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-10.1/lib64
+1
+2
+
+接着我们刷新下依赖：
+
+source /etc/profile
+1
+接下来我们来试下CUDA，通过以下指令你能看到CUDA的信息
+
+nvcc --version
+1
+接着我们来编译一个CUDA的Sample试试：
+
+# 首先进入到刚刚CUDA生成的Samples文件夹
+cd ~/NVIDIA_CUDA-10.1_Samples/1_Utilities/deviceQuery
+
+# 编译示例
+sudo make
+
+# 执行编译生成的二进制文件
+./deviceQuery
+1
+2
+3
+4
+5
+6
+7
+8
+如果编译成功，执行二进制文件后你会看到你的GPU设备信息，我们安装的CUDA Runtime Version = 10.1 以及 Result = PASS ，看到pass就说明安装正确。
+
+
+3.cuDNN7.6.4 安装
+NVIDIA cuDNN是用于深度神经网络的GPU加速库。
+
+cuDNN安装很简单，就是将解压的文件放到指定位置即可：
+首先进入到你存放cuDNN的文件夹里打开终端，
+在解压前先修改下名称，我们下载的文件后缀是.solitairetheme8，我们将其改称.tar后缀，在解压
+
+cp cudnn-10.0-linux-x64-v7.6.2.24.solitairetheme8 ./cudnn-10.0-linux-x64-v7.6.2.24.tar
+tar -xvf ./cudnn-10.0-linux-x64-v7.6.2.24.tar
+1
+2
+解压后会在当前文件夹里生成一个cuda文件夹，接着将文件复制到指定位置：
+
+sudo cp ./cuda/include/cudnn.h /usr/local/cuda/include/ 
+sudo cp ./cuda/lib64/libcudnn* /usr/local/cuda/lib64/ 
+1
+2
+给这些文件赋予权限，让所有用户都能读取:
+
+sudo chmod a+r /usr/local/cuda/include/cudnn.h 
+sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
+1
+2
+4.安装Tensorflow2.1 GPU
+如果你是直接安装的python3环境，那么通过以下指令进行安装就行：
+
+pip3 install tensorflow-gpu==2.1.0
+1
+如果你是使用anaconda3管理pyhton环境（我个人喜欢使用anaconda3来管理），可以通过以下指令安装（安装前你也可以先创建个虚拟环境，不创建也行看你的需求）：
+
+# 可以通过conda指令安装
+conda install tensorflow-gpu==2.1.0
+
+# 也可以用pip指令安装，二选一随你
+pip install tensorflow-gpu==2.1.0
+1
+2
+3
+4
+5
+安装后，我们进入python环境，导入tensorflow包，试试：
+只要导入没有报错就说明GPU版安装成功，下图有三个警告WARNING这是因为我们没有安装TensorRT包的原因，官方说可装可不装，所以你可以忽略这三条警告。
+
+Tensorflow2.1版本默认支持TensorRT(推理优化器，针对正向传播过程，把其他框架的模型统一转换到TensorRT中，并针对NVIDIA GPU实施优化策略，并进行部署加速)
+
+对于一个强迫症患者，你给我弹出这么多警告我能忍？
+下面开始安装TensorRT6.0（ 不想装的可以忽略 ），先给出一份 官方安装教程
+首先进入我们下载好的TensorRT6.0软件目录打开终端，进行解压：
+
+tar xzvf TensorRT-6.0.1.5.CentOS-7.6.x86_64-gnu.cuda-10.1.cudnn7.6.tar.gz
+1
+解压完后会在当前目录生成一个 TensorRT-6.0.1.5 文件夹
+
+将文件夹复制到 /usr/local/ 文件夹下，并赋权限让所有用户可读：
+
+sudo cp -r ./TensorRT-6.0.1.5/ /usr/local/
+sudo a+r /usr/local/TensorRT-6.0.1.5
+1
+2
+接着将TensorRT lib添加到系统环境，打开/etc/profile文件(不习惯使用vim的用其他编辑软件打开)
+
+sudo vim /etc/profile
+1
+在文件的最后加上以下语句，保存退出：
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/TensorRT-6.0.1.5/lib
+1
+接着更新系统环境变量
+
+source /etc/profile
+1
+最后我们需要再安装三个python的whl包
+（1）进入刚解压的TensorRT-6.0.1.5文件夹的python目录,安装tensorRT(下面是以anaconda3管理的python为例，如果你是直接安装的python3那么将安装指令 pip 改为 pip3 即可，如果你使用了虚拟环境记得切换到相关环境)：
+
+cd ./TensorRT-6.0.1.5/python/
+
+# 注意你的python是哪个版本就安装对应版本的whl文件，我的是3.6所以就是cp36的，如果你的是3.7的那就是cp37
+pip install tensorrt-6.0.1.5-cp36-none-linux_x86_64.whl
+
+1
+2
+3
+4
+5
+（2）进入到TensorRT-6.0.1.5文件夹的uff目录，安装uff(下面是以anaconda3管理的python为例，如果你是直接安装的python3那么将安装指令 pip 改为 pip3 即可，如果你使用了虚拟环境记得切换到相关环境)：
+
+cd ../uff
+pip install uff-0.6.5-py2-py3-none-any.whl
+1
+2
+(3)进入到TensorRT-6.0.1.5文件夹的graphsurgeon(下面是以anaconda3管理的python为例，如果你是直接安装的python3那么将安装指令 pip 改为 pip3 即可，如果你使用了虚拟环境记得切换到相关环境)：
+
+cd ../graphsurgeon
+pip install graphsurgeon-0.4.1-py2.py3-none-any.whl
+1
+2
+安装完成后我们再到python环境中导入一下tensorflow，发现之前的警告全部没有了，只打印了两个Information告诉我们载入动态库成功。
+
+至此，tensorflow2.1 GPU安装完成。散花！
+
+5.安装Pytorch1.3 GPU版
+如果你是直接安装的python3环境，那么通过以下指令进行安装就行（因为现在最新稳定版是1.3，通过以下指令会默认安装Pytorch1.3）：
+
+pip3 install torch torchvision
+1
+如果你是使用anaconda3管理pyhton环境（我个人喜欢使用anaconda3来管理），可以通过以下指令安装（安装前你也可以先创建个虚拟环境，不创建也行看你的需求）：
+
+pip install torch torchvision
+1
+安装后，我们进入python环境，导入torch包，试试：
+
+import toch
+torch.cuda.is_available()
+1
+2
+如果返回True就说明安装成功
