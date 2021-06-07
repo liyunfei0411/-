@@ -1,0 +1,262 @@
+在tensorflow2.0上训练最简单的模型并使用tensorrt加速推理
+引言
+运行环境准备
+工作流程
+例子
+训练和保存模型
+转换成tensorrt图
+优化并推理
+可能遇到的错误
+API
+引言
+tensorflow2.0出现后，tensorrt于tensorflow联系变得更加紧密了
+
+tensorflow2.0模型可以一句话转换成保存的模型，代替之前贼麻烦的PB文件
+可以用tensorrt优化并执行自己兼容的子图，而TensorFlow执行其余的图
+不用pycuda了，爽翻
+运行环境准备
+tensorrt	tensorflow	cudnn	cuda
+6.0.1.5	2.1 rc2	7.6.5	10.1（但是我准备的是10.0，可能会报错，解决方案往下看）
+官方推荐tf2.1搭配trt6，你也可以选择tf2.0搭配trt5，后面是一样的
+
+工作流程
+
+
+在tensorflow2.1上训练好模型，保存为savedmodel
+调用TrtGraphConverterV2将其转换为tensorrt图
+执行优化并保存 / 直接保存转换后的图
+使用优化好的图进行推理 / 优化并开始进行推理
+例子
+用MNIST softmax例子来说明吧
+
+训练和保存模型
+
+from tensorflow import keras
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import RMSprop
+
+batch_size = 128
+num_classes = 10
+epochs = 5
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+x_train = x_train.reshape(60000, 784)
+x_test = x_test.reshape(10000, 784)
+x_train = x_train.astype('float32')
+x_test = x_test.astype('float32')
+x_train /= 255
+x_test /= 255
+print(x_train.shape[0], 'train samples')
+print(x_test.shape[0], 'test samples')
+
+# convert class vectors to binary class matrices
+y_train = keras.utils.to_categorical(y_train, num_classes)
+y_test = keras.utils.to_categorical(y_test, num_classes)
+
+model = Sequential()
+model.add(Dense(512, activation='relu', input_shape=(784,)))
+model.add(Dropout(0.2))
+model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(num_classes, activation='softmax'))
+
+model.summary()
+
+model.compile(loss='categorical_crossentropy',
+              optimizer=RMSprop(),
+              metrics=['accuracy'])
+
+history = model.fit(x_train, y_train,
+                    batch_size=batch_size,
+                    epochs=epochs,
+                    verbose=1,
+                    validation_data=(x_test, y_test))
+score = model.evaluate(x_test, y_test, verbose=0)
+print('Test loss:', score[0])
+print('Test accuracy:', score[1])
+model.save('tf_savedmodel',save_format='tf')
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+转换成tensorrt图
+from tensorflow.python.compiler.tensorrt import trt_convert as trt
+params=trt.DEFAULT_TRT_CONVERSION_PARAMS
+params._replace(precision_mode=trt.TrtPrecisionMode.FP32)
+converter = trt.TrtGraphConverterV2(input_saved_model_dir='tf_savedmodel',conversion_params=params)
+converter.convert()#完成转换,但是此时没有进行优化,优化在执行推理时完成
+converter.save('trt_savedmodel')
+1
+2
+3
+4
+5
+6
+优化并推理
+import tensorflow as tf
+from tensorflow.python.compiler.tensorrt import trt_convert as trt
+
+from tensorflow.keras.datasets import mnist
+import time
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+x_test = x_test.astype('float32')
+x_test = x_test.reshape(10000, 784)
+x_test /= 255
+
+
+saved_model_loaded = tf.saved_model.load(
+    "trt_savedmodel", tags=[trt.tag_constants.SERVING])#读取模型
+graph_func = saved_model_loaded.signatures[
+    trt.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY]#获取推理函数,也可以使用saved_model_loaded.signatures['serving_default']
+frozen_func = trt.convert_to_constants.convert_variables_to_constants_v2(
+    graph_func)#将模型中的变量变成常量,这一步可以省略,直接调用graph_func也行
+
+
+t=time.time()
+output = frozen_func(tf.constant(x_test))[0].numpy()
+print(time.time()-t)
+print((output.argmax(-1)==y_test).mean())
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+可能遇到的错误
+转换模型时python直接退出
+
+查看tensorrt的调试输出，可能会看到名义上一个CUDA的一些库无法找到libcublas.so.10，这可能是因为CUDA版本不符合tensorrt6所需要的版本，更改CUDA版本之前推荐尝试我的方法：
+我安装的是cuda10.0，CUDA / lib64下里面有libcublas.so.10.0而没有tensorrt所需要的libcublas.so.10，将libcublas.so.10.0复制为libcublas.so.10
+对其他调试输出也进行类似修改即可。
+
+突然莫名其妙打不开tensorrt
+
+试试 import pycuda.autoinit 会不会报错,如果报错,我的解决方案是重启.
+
+API
+trt.TrtGraphConverterV2
+
+构造函数的参数
+
+input_saved_model_dir
+保存的模型所在的目录
+conversion_params
+默认值为 trt.DEFAULT_TRT_CONVERSION_PARAMS,它包括以下这些常用项：
+
+max_workspace_size_bytes
+默认值为1GB。 TensorRT引擎在执行时可以使用的最大GPU临时内存。
+precision_mode
+默认值为 TrtPrecisionMode.FP32,这个图应该用什么类型进行推理,可以使用TrtPrecisionMode.x来表示,也能用’fp32’,'FP16’等字符串表示.
+use_calibration
+默认为True,这个参数只有使用int8进行推理的时候有用,其为True时,会默认地为int8创建量化范围,否则需要进行校准.(为了最大化利用int8的精度)
+
+其他常用的方法
+
+TrtGraphConverter.convert(calibration_input_fn)
+进行转换,这一步必须完成
+TrtGraphConverter.build(input_fn)
+convert并不会完成优化,优化默认会在推理时执行,但是这个过程有时会很耗费时间.这时,可以用这个方法进行优化后保存,参数为一个返回数据样本的生成器,下面是例子
+
+from tensorflow.python.compiler.tensorrt import trt_convert as trt
+import tensorflow as tf
+params=trt.DEFAULT_TRT_CONVERSION_PARAMS
+params._replace(precision_mode=trt.TrtPrecisionMode.FP32)
+params._replace(is_dynamic_op=True)
+converter = trt.TrtGraphConverterV2(input_saved_model_dir='tf_savedmodel',conversion_params=params)
+converter.convert()
+from tensorflow.keras.datasets import mnist
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+x_test = x_test.astype('float32')
+x_test = x_test.reshape(10000, 784)
+x_test /= 255
+def input_fn():
+   yield (x_test[:1]),
+converter.build(input_fn)
+converter.save('trt_savedmodel')
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+保存的模型调用方法跟之前一样,可以加个计时器比较一下两者的速度
+TrtGraphConverter.save()
+进行保存
