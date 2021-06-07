@@ -76,20 +76,21 @@ sudo yum install freeglut.x86_64 freeglut-devel.x86_64
 接着注意 Please make sure that 给的一些提示，提示我们需要将相关依赖添加到系统环境中。
 
 接着我们按照提示来添加下系统环境：
-首先打开/etc/profile文件，如果不习惯使用vim，可以用其他的编辑器打开
+首先在～目录打开.bashrc文件，如果不习惯使用vim，可以用其他的编辑器打开
 
-sudo vim /etc/profile
+sudo vim .bashrc
 1
 在文件的最后加上以下信息并保存退出：
 
-export PATH=$PATH:/usr/local/cuda-10.1/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-10.1/lib64
-1
+export PATH=$PATH:/usr/local/cuda-10.1/bin
+export CUDA_HOME=$CUDA_HOME:/usr/local/cuda-10.1
+
 2
 
 接着我们刷新下依赖：
 
-source /etc/profile
+source .bashrc
 1
 接下来我们来试下CUDA，通过以下指令你能看到CUDA的信息
 
