@@ -1,0 +1,493 @@
+C++调用TensorFlow和TensorRT进行加速
+
+nudt_qxx 2019-07-03 21:08:10  6281  收藏 18
+分类专栏： C++ 深度学习框架 TensorFlow
+本文系转载，出处：如何用CPP调用TensorFlow&&TensorRT
+
+环境
+
+tensorflow r.1.13 + tensorrt-5.0.2.6
+cuda10
+cudnn 7.6.1
+初步接触
+
+最近训练了一个人脸的landmark regression&& confidence output的model( based Tensorflow)。因为模型中用到了一些不常见的op（在此感慨一下TensorFlow真是什么op都有，能够很快组合实现出一个自己的想法）, 无法完全转化为常用的TVM, TensorRT等加速推理框架(也可以在框架内实现自定义的op, 这个比较麻烦)。一个比较快速经济的方法就是直接使用TensorFlow with TensorRT (TF-TRT)
+
+TensorFlow with TensorRT可以直接对TensorFlow的graph进行优化重构，然后还可以使用Tensorflow的API进行inference。
+
+官方给出了Python实例，只需要一行代码:
+
+# Import TensorFlow and TensorRT
+import tensorflow as tf
+import tensorflow.contrib.tensorrt as trt
+# Inference with TF-TRT frozen graph workflow:
+graph = tf.Graph()
+with graph.as_default():
+    with tf.Session() as sess:
+        # First deserialize your frozen graph:
+        with tf.gfile.GFile(“/path/to/your/frozen/graph.pb”, ‘rb’) as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+        # Now you can create a TensorRT inference graph from your
+        # frozen graph:
+        trt_graph = trt.create_inference_graph(
+            input_graph_def=graph_def,
+            outputs=[“your_output_node_names”],
+            max_batch_size=your_batch_size,
+            max_workspace_size_bytes=max_GPU_mem_size_for_TRT,
+            precision_mode=”your_precision_mode”)
+        # Import the TensorRT graph into a new graph and run:
+        output_node = tf.import_graph_def(
+            trt_graph,
+            return_elements=[“your_outputs”])
+        sess.run(output_node)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+核心接口就是create_inference_graph，在库tensorflow.contrib.tensorrt中提供。对比优化前后，tensort在batch size不同的情况下对模型加速的效果比较明显，未使用量化最高可有一倍的加速比。
+
+可以看到用tft的优点如下：
+
+不用转化模型，复用TensorFlow接口，无缝嵌入TensorFlow代码;
+不用担心op不支持的问题，tft会忽略不支持的op，只是优化它支持的部分;
+支持fp32, fp16, int8, 以及训练感知量化(可以快速让我们验证算法最佳性能，决定是否采用该算法方案);
+可是，如果你像我一样，不仅要提供算法模型和python调用方式，还需要给出一份cpp可以运行的demo code。问题就来了：
+
+怎么样用cpp接口调用Tensorflow && TensorRT???
+
+CPP调用
+
+官网上只有python实例，如果想用cpp来调用，请先把模型完全转化为tensorrt支持的格式。如果你有一堆tensorrt不支持的op怎么办呢？答案：肯定是可以的（我也是搞完了才敢说这句话XD），但是怎么做官方没有实例，搜遍全网也没有教程，这个就需要我们自己探索了。
+
+TensorFlow代码浩繁复杂， bazel来组织编译(不是我们熟悉的cmake和makefile)，摸索起来还是比较费劲的，但是我们可以先从代码入手。经过一番寻找和阅读之后(此处省略1w字)，我终于找到了这个函数
+
+tensorflow/contrib/tensorrt/convert/conver_graph.cc，可直接点击conver_graph.cc查看：
+
+tensorflow::Status ConvertGraphDefToTensorRT(
+    const tensorflow::GraphDef& graph_def,
+    const std::vector<string>& output_names, size_t max_batch_size,
+    size_t max_workspace_size_bytes, tensorflow::GraphDef* new_graph_def,
+    int precision_mode, int minimum_segment_size, bool is_dyn_op,
+    int max_cached_engines, std::vector<int> cached_engine_batches,
+    bool use_calibration) {
+  // Create GrapplerItem.
+  tensorflow::grappler::GrapplerItem item;
+  item.fetch = output_names;
+  item.graph = graph_def;
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+虽然这个函数并没有调用示例，我们可以想到的是类似与Python，自己用cpp调用这个方法，加入到tensorflow inference代码里面去就好啦。步骤如下：
+
+一. 源码编译tensorflow r.1.13 + tensorrt-5.0.2.6 (cuda10, cudnn 7.6.1)
+
+注意1. tensorrt的版本搭配支持TensorFlow有版本要求，详见官方文档，不想阅读文档的话请和我保持一致；
+
+注意2. 如果编译tensorflow提示找不到cudnn等方法，请尝试在/etc/ld.so.conf.d里面加入cuda.conf, 内容是：/usr/local/cuda-10.0/lib64,然后sudo ldconfig。
+
+二. 在tensorflow/cc/example目录下面新建BUILD以及Test_align_model.cc
+
+load("//tensorflow:tensorflow.bzl", "tf_cc_binary")
+
+tf_cc_binary(
+    name = "example",
+    srcs = ["Test_align_model.cc"],
+    deps = [
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/cc:client_session",
+        "//tensorflow/core:tensorflow",
+        "//tensorflow/contrib/tensorrt:trt_conversion",
+        "//tensorflow/contrib/tensorrt:trt_engine_op_kernel",//添加contrib依赖
+    ],
+)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+Test_algin_model.cc(part):
+
+  GraphDef graph_def;
+    status = ReadBinaryProto(Env::Default(), "model.pb", &graph_def);
+    if (!status.ok()) {
+        std::cout << status.ToString() << "\n";
+        return 1;
+    }
+    int batch_size = 8;
+    GraphDef outGraph;
+    Status conversion_status =
+            tensorrt::convert::ConvertGraphDefToTensorRT(
+                    graph_def, {"confidence_network/confidence_pred:0", "landmark_network/landmark_pred:0"}, batch_size, 2097152,
+                    &outGraph, 0);
+
+    LOG(INFO) << conversion_status << std::endl;
+    std::vector<int> ltv = tensorrt::convert::GetLinkedTensorRTVersion();
+    std::vector<int> loadtv = tensorrt::convert::GetLoadedTensorRTVersion();
+    for (int i = 0; i < ltv.size(); i++) {
+        std::cout << ltv[i] << " ";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < loadtv.size(); i++) {
+        std::cout << loadtv[i] << " ";
+    }
+    std::cout << std::endl;
+    // Add the graph to the session
+    status = session->Create(outGraph);
+    if (!status.ok()) {
+        std::cout << status.ToString() << "\n";
+        return 1;
+    }
+    // Setup inputs and outputs:
+
+    // Our graph doesn't require any inputs, since it specifies default values,
+    // but we'll change an input to demonstrate.
+    std::vector<Tensor> inputs_tensor;
+    std::string imgpath = "test.png";
+    tensorFromFile(imgpath, &inputs_tensor, batch_size);
+
+
+    std::vector<std::pair<string, tensorflow::Tensor>> inputs = {
+            { "input:0", inputs_tensor[0] }
+    };
+
+    // The session will initialize the outputs
+    std::vector<tensorflow::Tensor> outputs;
+
+    // Run the session, evaluating our "c" operation from the graph
+    for (int i = 0; i < 1000; i++) {
+        session->Run(inputs, {"confidence_network/confidence_pred:0", "landmark_network/landmark_pred:0"}, {}, &outputs);
+    }
+    using milli = std::chrono::milliseconds;
+    auto start = std::chrono::high_resolution_clock::now();
+    int N = 3000;
+    for (int i = 0; i < N; i++) {
+        status = session->Run(inputs, {"confidence_network/confidence_pred:0", "landmark_network/landmark_pred:0"}, {}, &outputs);
+    }
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::cout << "sess run took "
+              << float(std::chrono::duration_cast<milli>(finish - start).count()) / N
+              << " milliseconds\n";
+    if (!status.ok()) {
+        std::cout << status.ToString() << "\n";
+        return 1;
+    }
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+三. 运行
+
+bazel run --config=opt --config=cuda //tensorflow/cc/example:example
+1
+如果一切正常的话，这个程序是可以给出我们正确结果的,也不会报错。但是仔细check之后，我们会发现，速度比python inference快一些，但是如果你注释了trt优化图代码，速度没有区别。貌似tensorrt在cpp inference上面不灵了？！
+
+查找修复问题
+
+这个时候只能去从代码里面去找寻原因，仔细阅读conver_graph.cc里面ConverGraphDefToTensorRT的代码实现：
+
+  // Create RewriterConfig.
+  tensorflow::ConfigProto config_proto;
+  auto& rw_cfg =
+      *config_proto.mutable_graph_options()->mutable_rewrite_options();
+  // TODO(aaroey): use only const folding and layout for the time being since
+  // new optimizers break the graph for trt.
+  rw_cfg.add_optimizers("constfold");
+  rw_cfg.add_optimizers("layout");
+  auto optimizer = rw_cfg.add_custom_optimizers();
+  optimizer->set_name("TensorRTOptimizer");
+  auto& parameters = *(optimizer->mutable_parameter_map());
+  parameters["minimum_segment_size"].set_i(minimum_segment_size);
+  parameters["max_batch_size"].set_i(max_batch_size);
+  parameters["is_dynamic_op"].set_b(is_dyn_op);
+  parameters["max_workspace_size_bytes"].set_i(max_workspace_size_bytes);
+  TF_RETURN_IF_ERROR(GetPrecisionModeName(
+      precision_mode, parameters["precision_mode"].mutable_s()));
+  parameters["maximum_cached_engines"].set_i(max_cached_engines);
+  if (!cached_engine_batches.empty()) {
+    auto list = parameters["cached_engine_batches"].mutable_list();
+    for (const int batch : cached_engine_batches) {
+      list->add_i(batch);
+    }
+  }
+parameters["use_calibration"].set_b(use_calibration);
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+该函数首先填充一些优化配置项，然后加入了一些graph optimizer: constfold, layout, 以及tensorrt的优化核心：TensorRTOptimizer。
+
+仔细check 程序的log，发现只有constfold以及layout起了作用，TensorRTOptimizer并没有应用。它在trt_optimization_pass.cc中实现以及注册：
+
+class VerboseCustomGraphOptimizerRegistrar
+    : public tensorflow::grappler::CustomGraphOptimizerRegistrar {
+ public:
+  VerboseCustomGraphOptimizerRegistrar(
+      const tensorflow::grappler::CustomGraphOptimizerRegistry::Creator& cr,
+      const tensorflow::string& name)
+      : tensorflow::grappler::CustomGraphOptimizerRegistrar(cr, name) {
+    VLOG(1) << "Constructing a CustomOptimizationPass registration object for "
+            << name;
+  }
+};
+
+static VerboseCustomGraphOptimizerRegistrar TRTOptimizationPass_Registrar(
+    []() {
+      VLOG(1)
+          << "Instantiating CustomOptimizationPass object TensorRTOptimizer";
+      return new tensorflow::tensorrt::convert::TRTOptimizationPass(
+          "TensorRTOptimizer");
+    },
+    ("TensorRTOptimizer"));
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+在tensorflow/core/grappler/optimizers/meta_optimizer.cc中，见meta_optimizer.cc：
+
+Status MetaOptimizer::InitializeCustomGraphOptimizers(
+    const std::set<string>& pre_initialized_optimizers,
+    std::vector<std::unique_ptr<GraphOptimizer>>* optimizers) const {
+  for (const auto& optimizer_config : cfg_.custom_optimizers()) {
+    if (pre_initialized_optimizers.find(optimizer_config.name()) !=
+        pre_initialized_optimizers.end()) {
+      continue;
+    }
+    // Initialize the ExperimentalImplementationSelector here instead of
+    // CustomizeOptimizer registry, due the static link issue in TensorRT for
+    // double registry.
+    // TODO(laigd): Remove this hack and change it back to use the registry once
+    // the duplicate static import issue is fixed.
+    std::unique_ptr<CustomGraphOptimizer> custom_optimizer;
+    if (optimizer_config.name() == "ExperimentalImplementationSelector") {
+      custom_optimizer.reset(new ExperimentalImplementationSelector());
+    } else {
+      custom_optimizer = CustomGraphOptimizerRegistry::CreateByNameOrNull(
+          optimizer_config.name());
+    }
+    if (custom_optimizer) {
+      VLOG(2) << "Registered custom configurable graph optimizer: "
+              << optimizer_config.name();
+      TF_RETURN_IF_ERROR(custom_optimizer->Init(&optimizer_config));
+      optimizers->push_back(std::move(custom_optimizer));
+} 
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+在此函数中LOG(INFO)，会发现名为TensorRTOptimizer的custom optimizer并没有注册成功，验证了之前的想法。
+
+解决方法
+
+知道了原因，解决起来就比较简单了，在对外的libtensorflow_framework.so的依赖项加上trt_conversion模块，修改tensorflow/tensorflow/BUILD文件:
+
+tf_cc_shared_object(
+    name = "libtensorflow_framework.so",
+    framework_so = [],
+    linkopts = select({
+        "//tensorflow:darwin": [],
+        "//tensorflow:windows": [],
+        "//conditions:default": [
+            "-Wl,--version-script",  #  This line must be directly followed by the version_script.lds file
+            "$(location //tensorflow:tf_framework_version_script.lds)",
+        ],
+    }),
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tensorflow/core:core_cpu_impl",
+        "//tensorflow/core:framework_internal_impl",
+        "//tensorflow/core:gpu_runtime_impl",
+        "//tensorflow/core/grappler/optimizers:custom_graph_optimizer_registry_impl",
+        "//tensorflow/core:lib_internal_impl",
+        "//tensorflow/stream_executor:stream_executor_impl",
+        "//tensorflow:tf_framework_version_script.lds",
+        "//tensorflow/contrib/tensorrt:trt_conversion",//添加TensorRTOptimizer的实现模块
+    ] + tf_additional_binary_deps(),
+)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+重新运行命令：
+
+bazel run --config=opt --config=cuda  //tensorflow/cc/example:example
+1
+会发现在tensorrt的加持下，cpp inference会得到和python相同的加速比，而且比python接口的要快10%-30%。大功告成！
+
+有时间的话，下一篇讲讲如何将tft的bazel cpp project拆分成CMake组织方式。
