@@ -1,0 +1,195 @@
+ 
+TensorRT 介绍: 
+https://www.cnblogs.com/qccz123456/p/11767858.html
+ 
+在tensorflow2.0上使用tensorrt6加速:
+https://blog.csdn.net/weixin_43842032/article/details/103764010
+
+ 
+tensorrt在tensorflow中的使用demo：
+https://github.com/tensorflow/tensorrt
+
+https://github.com/tensorflow/tensorrt/blob/master/tftrt/examples/image-classification/image_classification.py
+
+https://github.com/tensorflow/tensorrt/blob/master/tftrt/examples/object_detection/object_detection.py
+
+ 
+
+[深度学习]TensorRT加速tensorflow实例:
+https://zhuanlan.zhihu.com/p/64114667
+
+tensorRt加速tensorflow模型推理（inception V3为例）:
+https://www.jianshu.com/p/cbf443a5040c
+ 
+
+如何用CPP调用TensorFlow&&TensorRT
+https://zhuanlan.zhihu.com/p/72065298
+https://www.jianshu.com/p/bcbaf19f2d74
+
+官方c++实例：
+https://docs.nvidia.com/deeplearning/sdk/tensorrt-developer-guide/index.html
+
+ 
+
+ 
+
+转载：https://www.jianshu.com/p/dd2cfc33b437
+本文翻译于博客Speed up TensorFlow Inference on GPUs with TensorRT，这篇博客介绍了如何使用TensorRT加速TensorFlow模型的推理速度，作者为：
+
+Siddharth Sharma — Technical Product Marketing Manager, NVidia
+Sami Kama — Deep Learning Developer Technologist, NVidia
+Julie Bernauer — Pursuit Engineering Solution Architect, NVidia
+Laurence Moroney — Developer Advocate, Google
+概述
+TensorFlow是当今最受欢迎的深度学习框架，在全球有着数十万名用户。NVIDIA®TensorRT™是一个深度学习平台，用于优化神经网络模型，加快数据中心，嵌入式芯片和汽车设备中运行的GPU加速平台的推理速度。我们对TensorFlow与TensorRT的集成感到兴奋，这似乎很自然，特别是NVIDIA提供的平台非常适合用于加速TensorFlow。这使得TensorFlow用户在使用TensorRT时具有极高的推理性能和近乎透明的工作流程。
+
+ 
+
+
+
+图1 tensor通过优化训练好的神经网络模型来生成部署就绪的推理引擎
+
+TensorRT对神经网络图执行几项重要的转换和优化（图2）。首先，消除具有未使用的输出层以避免不必要的计算。接下来，在可能的情况下，对卷积，偏置和ReLU层进行融合以形成单个层。另一种转换是水平层融合或层聚合，以及聚合层到它们各自输出的划分。水平层融合通过对使用相同源tensor的层进行组合，并应用具有相似参数的相同操作来提高性能。请注意，这些图优化操作不会更改计算图中的基础计算：相反，它们会对计算图进行重新构建，使其可以更快，更有效地进行推理。
+
+
+
+图2 （a）一个具有多个卷积层和激活层的卷积神经网络。（b）TensorRT通过融合垂直和水平层以及层消除操作简化了GoogLeNet Inception模块图，减少了计算和内存开销。
+
+ 
+
+如果您已经将TensorRT与TensorFlow模型一起使用，那么您应该知道，在过去的版本中，使用TensorRT优化需要导出训练好的TensorFlow计算图。您还需要手动导入某些不受支持的TensorFlow图层，然后在TensorRT中运行完整图形。在大多数情况下，您再也不用这样做了。在新的工作流中，您可以通过使用简单的API在TensorFlow中应用TensorRT强大的FP16和INT8优化。现有的TensorFlow程序只需要几行新代码就可以使用这些优化。
+
+在ResNet-50的基准测试钟，TensorRT将TensorFlow推断速度提高了8倍。这些性能改进仅需几行额外代码，并可与TensorFlow 1.7及更高版本一起使用。在本文中，我们将介绍新的工作流程和API，以帮助您开始使用它。
+
+在TensorFlow graphs中应用tensorRT优化
+如图3所示，在TensorFlow推理工作流中加入tensorRT优化需要一个额外操作，在这个额外操作（使用绿色进行高亮）中，TensorRT根据frozen TensorFlow graph构建优化后的推理图。
+
+ 
+
+
+
+图3 在TensorFlow中使用TensorRT时的工作流程图
+
+为了完成优化操作，TensorRT对frozen TensorFlow graph进行解析，选出图中可以进行优化的子图。之后，TensorRT对子图进行优化，并且在原TensorFlow graph中将需要优化的子图替换为TensorRT节点，图中其余部分保持不变。在推理过程中，TensorFlow将调用TensorRT来执行优化后的TensorRT节点。通过这种方法，开发人员可以继续使用灵活的TensorFlow功能集和TensorRT优化。
+
+举个栗子🌰，假设有个计算图由A,B,C三个子图组成，TensorRT对子图B进行了优化，之后将子图B替换为TensorRT节点。在推理过程中，TensorFlow执行了子图A，之后调用TensorFlow执行了子图B，最后使用TensorFlow执行了子图C。
+
+TensorRT优化了TensorFlow图中可能的最大子图。子图中的计算越多，从TensorRT获得的收益越大。您希望对大部分计算图进行优化，并使用最少数量的TensorRT节点替换，以获得最佳性能。根据计算图中的操作，优化后的计算图可能包含多个TensorRT节点。使用TensorFlow API，您可以指定子图中节点的最小数量，以便将其转换为TensorRT节点。任何小于指定设定节点数的子图都不会转换为TensorRT引擎，即使其与TensorRT兼容。这对于包含由不兼容节点分隔的小兼容子图的模型非常有用，从而导致微小的TensorRT引擎。
+
+让我们看看如何更详细地实现工作流。
+
+使用新的 TensorFlow APIs
+新的TensorFlow API支持使用几行新代码直接实现TensorRT优化。首先，指定分配给TensorFlow的GPU内存比例，剩余内存将用于TensorRT引擎。这可以通过使用GPUOptions函数的新参数per_process_gpu_memory_fraction来完成。需要在TensorFlow-TensorRT进程第一次启动时设置此参数。例如，将per_process_gpu_memory_fraction设置为0.67会为TensorFlow分配67％的GPU内存，为TensorRT引擎分配剩余三分之一的GPU内存。
+
+ 
+
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction = 
+                0 < memory_for_TensorFlow < 1)
+下一步是使用tensorRT对TensorFlow计算图进行分析，进行优化，并将需要优化的子图替换为tensotRT节点。您可以使用新函数create_inference_graph来对frozen TensorFlow graph进行tensorRT优化，这个函数的输入为frozen TensorFlow graph，返回含有tensorRT节点的优化图，如下面的代码片段所示：
+
+ 
+
+trt_graph = trt.create_inference_graph(
+   input_graph_def = frozen_graph_def,
+   outputs = output_node_name,
+   max_batch_size=batch_size,
+   max_workspace_size_bytes=workspace_size,
+   precision_mode=precision,
+   minimum_segment_size=3)
+让我们看看这个函数的参数：
+
+input_graph_def：frozen TensorFlow graph
+outputs：输出节点的tensor name，例如：[“resnet_v1_50/predictions/Reshape_1”]
+max_batch_size：整数，输入batch的大小，例如：16
+max_workspace_size_bytes：整数，tensorRT可用的最大内存
+precision_mode：string，可选值为：“FP32”, “FP16” 或者 “INT8”
+minimum_segment_size：整数（默认为3），控制要创建的TensorRT引擎的子图中的最小节点数，如果子图中的节点数小于这个值，那么这个子图将不会被替换为tensorRT节点
+per_process_gpu_memory_fraction和per_process_gpu_memory_fraction两个参数应该被一起使用，对TensorFlow和TensorRT的内存分配进行控制，进而获得应用程序的最佳性能。为了最大化推理性能，您可以分配给tensorRT多一点内存，将剩余的内存分配给TensorFlow。例如：在一块内存为12G的GPU中，如果您将per_process_gpu_memory_fraction设置为( 12–4 ) / 12 = 0.67，那么参数max_workspace_size_bytes应设置为4000000000，为TensorRT引擎收集大约4G的内存。同样，最佳的内存分割方案是依赖于应用程序的，可能需要一些迭代来寻找最佳划分。
+
+使用TensorBoard对优化后的计算图进行可视化
+在对 ResNet-50进行TensorRT优化之后，TensorBoard可以使我们清楚地看到ResNet-50计算图中的变化。如图4所示，TensorRT几乎优化了整张计算图，并使用名称为“my_trt_op0”（使用红色进行高亮）的单个节点进行替换。根据模型中的层和操作，由于优化操作，TensorRT节点替换掉了图中的一部分。命名为“ conv1”的操作其实不是真正的卷积层，只是将feature map的格式由NHWC转换为NCHW（注：NCHW分别对应batch_size, channel, height, width）。
+
+
+
+图4 （a）经过TensorBoard可视化之后的ResNet-50 （b）经过TensorRT优化之后的ResNet-50，其中的子图被替换为TensorRT节点
+
+ 
+
+在Volta GPU上使用Tensor Cores
+与FP32或FP64相比，使用半精度（也被称为FP16）可以降低神经网络的内存使用。FP16支持部署更大的网络，同时比FP32或FP64花费更少的时间。NVIDIA的Volta架构硬件采用了称为Tensor Cores的矩阵数学加速器。Tensor Cores提供4x4x4矩阵处理阵列，用于执行操作D = A * B + C，其中A, B, C and D为4×4的矩阵。图5展示了工作过程。矩阵乘法输入A和B是FP16矩阵，而累加矩阵C和D可以是FP16或FP32矩阵。
+
+ 
+
+
+
+图5 Tensor Cores上的矩阵处理操作
+
+当使用FP16 math检测到推理时，TensorRT会自动使用硬件Tensor Cores。 Tensor Cores在NVIDIA Tesla V100上的峰值性能比双精度（FP64）快一个数量级，而吞吐量比单精度（FP32）提高了4倍。可以在函数create_inference_graph中，将precision_mode设置为“ FP16”启用半精度计算，如下所示。getNetwork()用于从protobuf文件中读出frozen network，返回数据结构为tf.GraphDef()的神经网络。
+
+ 
+
+trt_graph = trt.create_inference_graph(
+                getNetwork(network_file_name), 
+                outputs,
+                max_batch_size=batch_size, 
+                max_workspace_size_bytes=workspace_size, 
+                precision_mode=”FP16")
+图6所示，在相同的硬件环境，小于7ms延时的情况下，应用基于NVIDIA Volta Tensor Cores的TensorFlow-TensorRT集成后的ResNet-50比仅使用TensorFlow的推理速度快8倍。
+
+ 
+
+
+
+图6 ResNet-50推理吞吐量性能
+
+使用INT8的精度进行推理
+使用INT8精度执行推理进一步提高了计算速度并降低了对带宽的要求。减小的动态范围给表示神经网络的权重和激活带来挑战。
+
+
+
+各个数据类型的动态范围
+
+
+TensorRT可以将以单精度（FP32）或者半精度（FP16）训练的模型转化为以INT8量化部署的模型，同时可以最小化准确率损失。使用TensorRT优化对模型进行INT8量化之前需要对精度为FP32的模型进行校验。在创建TensorRT优化推理图之前，工作流程将包含校准步骤（Create Calibration Graph and Calibrate），如图7所示：
+
+
+
+图7 包含INT8推理的工作流程
+
+
+首先使用create_inference_graph函数，将参数precision_mode设置为INT8来校准模型，此功能的输出是一个frozen TensorFlow graph，可以进行校准。
+
+ 
+
+ 
+
+trt_graph = trt.create_inference_graph(
+                getNetwork(network_file_name), 
+                outputs,
+                max_batch_size=batch_size,
+                max_workspace_size_bytes=workspace_size, 
+                precision_mode=”INT8")
+现在使用校准数据运行校准图。 TensorRT使用节点数据的分布来量化节点的权重。您必须使用与实际问题数据集分布相同或者类似的校准数据。我们建议在首次使用INT8校准的模型时，检查推理过程中的误差累积。minimum_segment_size可以帮助调整优化来最小化量化误差。通过使用minimum_segment_size，您可以更改优化的INT8引擎中的最小节点数，进而更改最终优化计算图以微调结果准确性。
+
+在校验数据上执行完计算图之后，使用函数calib_graph_to_infer_graph对检验之后的计算图应用TensorRT优化，这个函数同样会将TensorFlow中的子图替换为INT8优化后的TensorRT节点。函数的输出为可以用于推理的frozen TensorFlow graph。
+
+ 
+
+trt_graph=trt.calib_graph_to_infer_graph(calibGraph)
+在使用这两个命令之后，就可以以INT8的精度对您的模型进行推理了。
+
+如果您想查看此处显示的示例，请查看运行这些示例所需的代码：
+https://developer.download.nvidia.com/devblogs/tftrt_sample.tar.xz
+
+可用性
+我们希望通过将TensorRT与TensorFlow集成，进而在使用NVIDIA GPU时可以获得最高性能，同时保持TensorFlow的易用性和灵活性。 NVIDIA将继续与Google TensorFlow团队密切合作，进一步增强这些集成功能。随着TensorRT支持更多网络，开发人员将自动受益于更新，而无需更改现有代码。
+
+查找有关今天如何开始的说明：
+https://www.tensorflow.org/install/install_linux
+
+在不久的将来，我们希望标准的pip安装过程也能正常运行。敬请关注！
+
+我们相信，在使用GPU时，您会看到将TensorRT与TensorFlow集成的实质性好处。您可以在以下位置找到有关TensorFlow的更多信息：https://www.tensorflow.org/.
+
+有关TensorRT的更多信息，请访问NVIDIA的TensorRT页面https://developer.nvidia.com/tensorrt.
+
