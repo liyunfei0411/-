@@ -1,0 +1,11 @@
+只删除那些未被使用的资源
+docker system prune
+
+需要同时删除这些数据卷
+docker system prune --all --force --volumns
+
+如果删除时出现了image is being used by stopped container的错误就先使用一下命令再执行删除指令：
+docker ps -a | grep "Exited" | awk '{print $1 }'|xargs docker stop
+docker ps -a | grep "Exited" | awk '{print $1 }'|xargs docker rm
+docker images|grep none|awk '{print $3 }'|xargs docker rmi
+再次执行docker rmi + ID 成功
