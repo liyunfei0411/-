@@ -9,3 +9,12 @@ docker ps -a | grep "Exited" | awk '{print $1 }'|xargs docker stop
 docker ps -a | grep "Exited" | awk '{print $1 }'|xargs docker rm
 docker images|grep none|awk '{print $3 }'|xargs docker rmi
 再次执行docker rmi + ID 成功
+docker的python容器中执行print(‘测试’)，常见的错误提示，在宿主机不会出现
+
+UnicodeEncodeError: 'ascii' codec can't encode characters in position 
+python3 的解决方式是 容器在初始化时候 需要设置shell的stdin/stdout/stderr 的默认编码方式为 utf-8,需要重启容器
+
+docker run -e 指定python io encoding编码格式：
+
+# docker run 方式
+docker run -e PYTHONIOENCODING=utf-8 mydocker_image:v1 /bin/bash
