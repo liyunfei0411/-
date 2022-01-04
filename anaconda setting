@@ -1,0 +1,20 @@
+这是官方控制台界面说的一段话，就是说老版本的添加环境方法是不推荐了，也就是4.4版本
+就是这个(添加环境的方法)
+export PATH="/home/<user>/anaconda3/bin:$PATH"
+
+
+
+然后用的新方法(这个<user>记得要改成自己的)
+echo ". /home/<user>/anaconda3/etc/profile.d/conda.sh" >> ~/.bashrc
+sudo ln -s /home/<user>/anaconda3/etc/profile.d/conda.sh /etc/profile.d/conda.sh
+echo "conda activate" >> ~/.bashrc
+
+这个最后的可以改，它conda activate这个是默认激活的自己的base环境
+我自己是改成这样的
+echo "conda activate Py3_scrapy" >> ~/.bashrc
+后面跟上自己的环境名称，以后打开控制台自动激活
+
+若不能创建其他虚拟环境：
+cd到anaconda文件夹所在位置，运行以下命令即可
+
+sudo chown -R xxx anaconda3    #xxx为自己的用户名
