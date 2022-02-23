@@ -1,0 +1,77 @@
+#部署脚本会在部署组的每台机器上执行。一个典型Docker部署脚本如下： #示例中使用的$image是您在脚本下方的变量处定义的变量（上游输出或自定义） #export image=$(echo $image | base64 -d) #docker run $image
+
+#部署脚本会在部署组的每台机器上执行。一个典型Docker部署脚本如下： #示例中使用的$image是您在脚本下方的变量处定义的变量（上游输出或自定义） #export image=$(echo $image | base64 -d) #docker run $image
+
+# 登录Aliyun 镜像仓库
+export DOCKER_CONTENT_TRUST=0
+export DOCKER_USERNAME_1=$(echo $DOCKER_USERNAME | base64 -d)
+export DOCKER_PASSWORD_1=$(echo $DOCKER_PASSWORD | base64 -d)
+echo $DOCKER_PASSWORD_1 | docker login --username=$DOCKER_USERNAME_1 registry.cn-hangzhou.aliyuncs.com --password-stdin
+
+# 容器启动是，设置的名称 
+export CONTAINER_NAME=ocr
+# 项目启动，输出的日志文件目录
+export APP_NAME=ocr
+# 对外暴露的端口
+export PORT=8000
+
+# 获取上一层构建的镜像
+export IMAGE=$(echo $IMAGE | base64 -d)
+echo "部署中的镜像：$IMAGE"
+
+IMAGE_NAME=${IMAGE%:*}
+IMAGE_TAG=${IMAGE#*:}
+
+# 查询最新镜像
+export latest=`docker images ${IMAGE_NAME} --format "{{.Repository}}:{{.Tag}}" | head -1`
+echo "使用中最新镜像：$latest"
+
+echo 'Begin Stop Docker Container ....'
+# 查询运行的镜像:标签
+CONTAINER_IMAGE=$(docker ps -a --filter name=$CONTAINER_NAME --format "{{ .Image }}")
+
+if [ -z $CONTAINER_IMAGE ];then
+   echo "未找到[$APP_NAME]运行的容器镜像"
+else
+   echo "查询到[$APP_NAME]运行中的容器：$CONTAINER_IMAGE"
+   # 删除所有镜像
+fi
+
+# 查询运行中的容器id
+CONTAINER_ID=$(docker ps -aq --filter name=$CONTAINER_NAME)
+if [ -z $CONTAINER_ID ];then
+   echo -e "\rno java process"
+else
+  echo "stop java process[$CONTAINER_NAME]：$CONTAINER_ID"
+  # 停止上次的容器
+  docker stop $CONTAINER_ID && docker rm $CONTAINER_ID
+fi
+
+should_remove_image=$(docker images --format "{{ .Repository }}:{{ .Tag }}" |grep $IMAGE_NAME | grep -v "$IMAGE_TAG\|$CONTAINER_IMAGE\|latest")
+
+if [ -z ${should_remove_image} ]; then
+  echo '未发现有要删除的镜像.'
+else
+  docker rmi ${should_remove_image}
+fi
+
+# 先获取最新镜像
+docker pull $IMAGE
+
+echo "运行中的容器:"
+echo -e `docker ps`
+echo '--------------------------------------------------'
+CONTAINER_ID=`docker ps -aq --filter name=$CONTAINER_NAME`
+echo "运行中的容器ID：$CONTAINER_ID"
+if [ -z $CONTAINER_ID ];then
+   echo '未找到[sick_classify]的容器ID'
+else
+   # 停止上次的容器
+   docker stop $CONTAINER_ID
+   # 删除上次的容器
+   docker rm $CONTAINER_ID
+fi
+
+# 启动镜像，给容器指定一个唯一的名字，上面停止、删除容器时要用到
+# docker run --name sick_classify -itd -p 9020:9020 $image_id
+docker run --name $CONTAINER_NAME -itd --gpus all -p ${PORT}:${PORT} -v /var/log/${APP_NAME}:/var/log/${APP_NAME} -v /var/log/cmv/api-log:/var/log/cmv/api-log $IMAGE
