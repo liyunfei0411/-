@@ -18,3 +18,5 @@ docker run -e 指定python io encoding编码格式：
 
 # docker run 方式
 docker run -e PYTHONIOENCODING=utf-8 mydocker_image:v1 /bin/bash
+查看docker中程序对应pid进程
+docker container top <container>
