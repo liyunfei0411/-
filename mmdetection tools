@@ -1,0 +1,235 @@
+mmdetection tools工具梳理
+mmdetection 是一个非常好用的开源目标检测框架，我们可以用它方便地训练自己的目标检测模型，mmdetection 项目仓库提供许多实用的工具来实现帮助我们进行各种测试。本篇将梳理以下 mmdetection 项目仓库 tools 目录下的各种实用工具。
+
+测试版本：
+
+mmcv-full == 1.4.8
+
+mmdet == 2.24.1
+
+训练相关
+tools/train.py
+这个自然是最常用的，我们训练模型通常就是用这个脚本来启动，通常只需要传入配置文件路径即可，其他更详细的参数可参考源码，
+
+python tools/train.py configs/my_coco_config/my_coco_config.py
+1
+tools/dist_train.sh
+该脚本是用于启动单机多卡/多机多卡分布式训练的，里面内容不多，无非是对 python -m torch.distributed.launch ... 的封装，留给用户的接口很简单，只需要指定想要用的 GPU 的个数即可，
+
+bash tools/dist_train.sh configs/my_coco_config/my_coco_config.py 3
+1
+性能测试相关
+tools/test.py
+此工具用来测试模型的性能
+
+可以选择评估方式 --eval ，对于 COCO 数据集，可选 bbox 、segm、proposal ；对于 VOC 数据集，可选 map、recall
+也可以选择 --out ，指定测试结果的 pkl 输出文件
+python tools/test.py configs/my_coco_config/my_coco_config.py checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth  --eval bbox
+1
+输出：
+
+
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.374
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=1000 ] = 0.581
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=1000 ] = 0.404
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=1000 ] = 0.212
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=1000 ] = 0.410
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=1000 ] = 0.481
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.517
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=300 ] = 0.517
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=1000 ] = 0.517
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=1000 ] = 0.326
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=1000 ] = 0.557
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=1000 ] = 0.648
+
+OrderedDict([('bbox_mAP', 0.374), ('bbox_mAP_50', 0.581), ('bbox_mAP_75', 0.404), ('bbox_mAP_s', 0.212), ('bbox_mAP_m', 0.41), ('bbox_mAP_l', 0.481), ('bbox_mAP_copypaste', '0.374 0.581 0.404 0.212 0.410 0.481')])
+
+或指定输出到 pkl 文件：
+
+python tools/test.py configs/my_coco_config/my_coco_config.py checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth  --out faster_rcnn_fpn_coco.pkl
+1
+tools/analysis_tools/eval_metric.py
+可以根据上面 --out 保存的结果 pkl 文件计算指标，而无需重新跑
+
+python ./tools/analysis_tools/eval_metric.py configs/my_coco_config/my_coco_config.py faster_rcnn_fpn_coco.pkl --eval bbox
+1
+tools/analysis_tools/analyze_results.py
+可以将模型的预测结果框画出来进行可视化，其中第二个参数是上面 --out 保存的结果 pkl 文件，第三个是参数是结果保存到的目录，可以通过 --show-score-thr 来指定可视化框的阈值
+
+python tools/analysis_tools/analyze_results.py configs/my_coco_config/my_coco_config.py faster_rcnn_fpn_coco.pkl show_dir/
+1
+tools/analysis_tools/analyze_logs.py
+用于分析我们训练过程中得到的日志文件，注意这里传入的日志文件必须是 json 文件，而第一个参数 plot_curve 有两个可选项：plot_curve 和 cal_train_time ，同样可以通过 --out 指定输出图片文件。
+
+python tools/analysis_tools/analyze_logs.py plot_curve work_dirs/my_coco_config/20220503_165551.log.json --out log_curve.png
+1
+
+
+tools/analysis_tools/benchmark.py
+此工具是用来测试模型在当前环境下的推理速度的，模型会跑一遍配置文件中指定的测试集，计算单图推理时间（FPS）。
+
+python tools/analysis_tools/benchmark.py configs/my_coco_config/my_coco_config.py checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth
+1
+笔者在 mmdet == 2.24.1 版本亲测是不能按照如上方式进行 benchmark 测试的，会报错只支持分布式模式（如下）
+
+NotImplementedError: Only supports distributed mode
+1
+但这无妨，我们改用分布式的方式启动即可，注意只有一张卡也可以用分布式的方式启动，将 n_proc_per_node 设置为 1 即可，如下可行：
+
+python -m torch.distributed.launch --nproc_per_node=1 --master_port=29500 tools/analysis_tools/benchmark.py configs/my_coco_config/my_coco_config.py checkpoints/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth --launcher pytorch
+1
+得到结果类似如下：
+
+Done image [50 / 2000], fps: 23.4 img / s, times per image: 42.7 ms / img
+...
+Done image [2000/ 2000], fps: 22.6 img / s, times per image: 44.2 ms / img
+1
+2
+3
+tools/analysis_tools/get_flops.py
+本工具用于统计模型的参数量，可以通过 --shape 参数指定输入图片的尺寸
+
+python tools/analysis_tools/get_flops.py configs/my_coco_config/my_coco_config.py --shape 640 480
+1
+tools/analysis_tools/confusion_matrix.py
+计算混淆矩阵，需要输入的三个参数是：config文件，pkl结果文件，输出目录
+
+mkdir coco_confusion_matrix/
+python tools/analysis_tools/confusion_matrix.py configs/my_coco_config/my_coco_config.py faster_rcnn_fpn_coco.pkl coco_confusion_matrix/
+1
+2
+Faster-RCNN w/ FPN 在 COCO 80 类的混淆矩阵如下：
+
+
+
+这里只是展示一下，跑出来的原图很大很清晰可以放大看。
+
+画 PR 曲线 plot_pr_curve.py
+画 PR 曲线需要使用以下文件 plot_pr_curve.py ，并非官方仓库中的，而是来自这个 repo
+
+import os
+import sys
+import mmcv
+import numpy as np
+import argparse
+import matplotlib.pyplot as plt
+
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
+
+from mmcv import Config
+from mmdet.datasets import build_dataset
+
+
+def plot_pr_curve(config_file, result_file, out_pic, metric="bbox"):
+    """plot precison-recall curve based on testing results of pkl file.
+
+        Args:
+            config_file (list[list | tuple]): config file path.
+            result_file (str): pkl file of testing results path.
+            metric (str): Metrics to be evaluated. Options are
+                'bbox', 'segm'.
+    """
+    
+    cfg = Config.fromfile(config_file)
+    # turn on test mode of dataset
+    if isinstance(cfg.data.test, dict):
+        cfg.data.test.test_mode = True
+    elif isinstance(cfg.data.test, list):
+        for ds_cfg in cfg.data.test:
+            ds_cfg.test_mode = True
+
+    # build dataset
+    dataset = build_dataset(cfg.data.test)
+    # load result file in pkl format
+    pkl_results = mmcv.load(result_file)
+    # convert pkl file (list[list | tuple | ndarray]) to json
+    json_results, _ = dataset.format_results(pkl_results)
+    # initialize COCO instance
+    coco = COCO(annotation_file=cfg.data.test.ann_file)
+    coco_gt = coco
+    coco_dt = coco_gt.loadRes(json_results[metric]) 
+    # initialize COCOeval instance
+    coco_eval = COCOeval(coco_gt, coco_dt, metric)
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+    # extract eval data
+    precisions = coco_eval.eval["precision"]
+    '''
+    precisions[T, R, K, A, M]
+    T: iou thresholds [0.5 : 0.05 : 0.95], idx from 0 to 9
+    R: recall thresholds [0 : 0.01 : 1], idx from 0 to 100
+    K: category, idx from 0 to ...
+    A: area range, (all, small, medium, large), idx from 0 to 3
+    M: max dets, (1, 10, 100), idx from 0 to 2
+    '''
+    pr_array1 = precisions[0, :, 0, 0, 2] 
+    pr_array2 = precisions[1, :, 0, 0, 2] 
+    pr_array3 = precisions[2, :, 0, 0, 2] 
+    pr_array4 = precisions[3, :, 0, 0, 2] 
+    pr_array5 = precisions[4, :, 0, 0, 2] 
+    pr_array6 = precisions[5, :, 0, 0, 2] 
+    pr_array7 = precisions[6, :, 0, 0, 2] 
+    pr_array8 = precisions[7, :, 0, 0, 2] 
+    pr_array9 = precisions[8, :, 0, 0, 2] 
+    pr_array10 = precisions[9, :, 0, 0, 2] 
+
+    x = np.arange(0.0, 1.01, 0.01)
+    # plot PR curve
+    plt.plot(x, pr_array1, label="iou=0.5")
+    plt.plot(x, pr_array2, label="iou=0.55")
+    plt.plot(x, pr_array3, label="iou=0.6")
+    plt.plot(x, pr_array4, label="iou=0.65")
+    plt.plot(x, pr_array5, label="iou=0.7")
+    plt.plot(x, pr_array6, label="iou=0.75")
+    plt.plot(x, pr_array7, label="iou=0.8")
+    plt.plot(x, pr_array8, label="iou=0.85")
+    plt.plot(x, pr_array9, label="iou=0.9")
+    plt.plot(x, pr_array10, label="iou=0.95")
+
+    plt.xlabel("recall")
+    plt.ylabel("precison")
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 1.01)
+    plt.grid(True)
+    plt.legend(loc="lower left")
+    plt.savefig(out_pic)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config', help='config file path')
+    parser.add_argument('pkl_result_file', help='pkl result file path')
+    parser.add_argument('--out', default='pr_curve.png')
+    parser.add_argument('--eval', default='bbox')
+    cfg = parser.parse_args()
+
+    plot_pr_curve(config_file=cfg.config, result_file=cfg.pkl_result_file, out_pic=cfg.out, metric=cfg.eval)
+
+
+python plot_pr_curve.py configs/my_coco_config/my_coco_config.py faster_rcnn_fpn_coco.pkl
+1
+这里用到的 pkl 结果文件，即是上面运行 tools/test.py 指定 --out 的输出文件。
+
+最终得到的 PR 曲线如下：
+
+
+
+Misc
+tools/misc/print_config
+我们自定义的 config 文件通常是通过 _base_ 继承自很多基础的 config 文件，如：
+
+_base_ = ['../faster_rcnn/faster_rcnn_r50_fpn_1x_coco.py']
+1
+所以我们直接看到的 config 文件内容并不是完整的，此时如果想要查看完整的 config 文件，即可通过该工具实现
+
+python tools/misc/print_config.py configs/my_coco_config/my_coco_config.py
+1
+tools/misc/browse_dataset.py
+有时
+
+我们完成数据集转换，转成 COCO 格式之后，我们不确定自己的转换是否正确，框的位置对不对（如xyxy、xywh没对齐之类的）
+或者我们添加了一些自定义的数据扩增，不确定结果数据扩增 pipeline 之后的是否是我们想要的结果
+就可以通过这个工具来进行可视化，如果是远程服务器上的数据不方便直接显示，还可以通过指定 --output-dir 参数来指定可视化结果输出到的目录：
+
+python tools/misc/browse_dataset.py configs/my_coco_config/my_coco_config.py  --output-dir viz_dataset/
